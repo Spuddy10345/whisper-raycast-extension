@@ -1,10 +1,10 @@
 {
   "name": "whisper-dictation",
   "title": "Whisper Dictation",
-  "description": "Speech-to-text using Whisper base.en",
-  "icon": "command-icon.png",
-  "author": "your-name",
-  "categories": ["Productivity", "Text"],
+  "description": "Speech-to-text using whisper.cpp",
+  "icon": "extension-icon.png",
+  "author": "finjo",
+  "categories": ["Productivity", "AI"],
   "license": "MIT",
   "commands": [
     {
