@@ -1,0 +1,48 @@
+{
+  "name": "whisper-dictation",
+  "title": "Whisper Dictation",
+  "description": "Speech-to-text using Whisper base.en",
+  "icon": "command-icon.png",
+  "author": "your-name",
+  "categories": ["Productivity", "Text"],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "dictate",
+      "title": "Dictate Text",
+      "description": "Convert speech to text using Whisper",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "whisperExecutable",
+      "type": "textfield",
+      "required": true,
+      "title": "Whisper Executable Path",
+      "description": "Path to whisper-cpp main executable",
+      "placeholder": "/Users/finjo/Documents/Raycast/whisper.cpp/main"
+    },
+    {
+      "name": "modelPath",
+      "type": "textfield",
+      "required": true,
+      "title": "Whisper Model Path",
+      "description": "Path to Whisper model file (.bin)",
+      "placeholder": "/Users/finjo/Documents/Raycast/whisper.cpp/models/ggml-base.en.bin"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.55.2"
+  },
+  "devDependencies": {
+    "@raycast/utils": "^1.8.0",
+    "@types/node": "^18.8.3",
+    "@types/react": "^18.0.9",
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop"
+  }
+}
