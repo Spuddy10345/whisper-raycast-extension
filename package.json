@@ -30,6 +30,28 @@
       "title": "Whisper Model Path",
       "description": "Path to Whisper model file (.bin)",
       "placeholder": "/Users/finjo/Documents/Raycast/whisper.cpp/models/ggml-base.en.bin"
+    },
+    {
+      "description": "Action to perform automatically after transcription completes",
+      "title": "Default Action After Transcription",
+      "name": "defaultAction",
+      "type": "dropdown",
+      "data": [
+        {
+          "title": "Paste Text",
+          "value": "paste"
+        },
+        {
+          "title": "Copy to Clipboard",
+          "value": "copy"
+        },
+        {
+          "title": "None (Show Options)",
+          "value": "none"
+        }
+      ],
+      "required": false,
+      "default": "none"
     }
   ],
   "dependencies": {

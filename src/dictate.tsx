@@ -7,16 +7,26 @@ import {
   closeMainWindow,
   Icon,
   Detail,
+  getPreferenceValues,
+  Clipboard,
 } from "@raycast/api";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { spawn, exec } from "child_process";
 import type { ChildProcessWithoutNullStreams } from "child_process";
 
+interface Preferences {
+  whisperExecutable: string;
+  modelPath: string;
+  defaultAction: "paste" | "copy" | "none";
+}
+
 // Paths
+const preferences = getPreferenceValues<Preferences>();
 const SOX_PATH = "/opt/homebrew/bin/sox";
 const WHISPER_CPP_PATH = "/Users/finjo/Documents/Raycast/whisper.cpp/build/bin/whisper-cli";
 const MODEL_PATH = "/Users/finjo/Documents/Raycast/whisper.cpp/models/ggml-base.en.bin";
 const AUDIO_FILE_PATH = "/tmp/raycast_dictate_audio.wav"; 
+const DEFAULT_ACTION = preferences.defaultAction || "none";
 
 // Define states
 type CommandState = "idle" | "recording" | "transcribing" | "done" | "error";
@@ -171,7 +181,7 @@ export default function Command() {
     console.log("Starting transcription...");
     exec(
       `${WHISPER_CPP_PATH} -m ${MODEL_PATH} -f ${AUDIO_FILE_PATH} -l en -otxt`,
-      (error, stdout, stderr) => {
+      async (error, stdout, stderr) => {
         if (error) {
           console.error("whisper error:", error);
           console.error("whisper stderr:", stderr);
@@ -179,31 +189,22 @@ export default function Command() {
           setState("error");
         } else {
           console.log("Transcription successful.");
-          // Removes [00:00:00.000 --> 00:00:05.000]  and [pause]
-          console.log("Raw whisper stdout:", stdout);
-
-          // Remove all content within square brackets using regex
-          let cleanedText = stdout.replace(/\[.*?\]/g, '');
-
-          // Remove multiple whitespace 
-          cleanedText = cleanedText.replace(/\s+/g, ' ');
-
-          // remove leading/trailing whitespace
-          cleanedText = cleanedText.trim();
-
-          console.log("Cleaned text:", cleanedText); // Log the final cleaned text
-          setTranscribedText(cleanedText);
+          const trimmedText = stdout.trim().replace(/^\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*/, '');
+          setTranscribedText(trimmedText);
           setState("done");
-          showToast({ style: Toast.Style.Success, title: "Transcription complete" });
+          
+          // Call handler for automatic action
+          await handleTranscriptionComplete(trimmedText);
         }
-        // Clean up audio file whether transcription success/failure
+        // Clean up audio file regardless of success/failure
         exec(`rm -f ${AUDIO_FILE_PATH}`, (err) => {
-             if (err) console.error("Error cleaning up audio file post-transcription:", err.message);
-             else console.log("Cleaned up audio file post-transcription.");
-         });
+          if (err) console.error("Error cleaning up audio file post-transcription:", err.message);
+          else console.log("Cleaned up audio file post-transcription.");
+        });
       }
     );
-  }; 
+  };
+
 
 // Animate waveform
 useEffect(() => {
@@ -218,7 +219,7 @@ useEffect(() => {
 
 // Generate the waveform 
 const generateWaveformMarkdown = useCallback(() => {
-  //control waveform height/width
+  // Control waveform height/width
   const waveformHeight = 18;
   const waveformWidth = 105;
   
@@ -261,9 +262,28 @@ const generateWaveformMarkdown = useCallback(() => {
     }
     waveform += line + "\n";
   }
-  
   return `\`\`\`\n${waveform}\`\`\``;
 }, [waveformSeed]);
+
+const handleTranscriptionComplete = useCallback(async (text: string) => {
+  // Automatically paste
+  if (DEFAULT_ACTION === "paste") {
+    await Clipboard.paste(text);
+    showToast({ style: Toast.Style.Success, title: "Pasted transcribed text" });
+    cleanupSoxProcess();
+    closeMainWindow();
+  } else if (DEFAULT_ACTION === "copy") {
+    // Automatically copy
+    await Clipboard.copy(text);
+    showToast({ style: Toast.Style.Success, title: "Copied to clipboard" });
+    cleanupSoxProcess();
+    closeMainWindow();
+  } else {
+    // Default action (none preference selected)
+    showToast({ style: Toast.Style.Success, title: "Transcription complete" });
+  }
+}, []);
+
 
   const getActionPanel = () => {
     console.log(`getActionPanel called. Current state: ${state}`); 
@@ -279,20 +299,33 @@ const generateWaveformMarkdown = useCallback(() => {
             }}/>
           </ActionPanel>
         );
-      case "done":
+
+        case "done":
         return (
           <ActionPanel>
-            {/* Pass the stable cleanup function directly */}
-            <Action.Paste title="Paste Text" content={transcribedText} onPaste={cleanupSoxProcess}/>
-            <Action.CopyToClipboard title="Copy Text" content={transcribedText} shortcut={{ modifiers: ["cmd"], key: "enter" }} onCopy={cleanupSoxProcess}/>
-             <Action title="Start New Dictation" icon={Icon.ArrowClockwise} onAction={() => {
-                // Reset for a new recording
+            <Action.Paste 
+              title={DEFAULT_ACTION === "paste" ? "Paste Text (Default)" : "Paste Text"} 
+              content={transcribedText} 
+              onPaste={cleanupSoxProcess}
+            />
+            <Action.CopyToClipboard 
+              title={DEFAULT_ACTION === "copy" ? "Copy Text (Default)" : "Copy Text"} 
+              content={transcribedText} 
+              shortcut={{ modifiers: ["cmd"], key: "enter" }} 
+              onCopy={cleanupSoxProcess}
+            />
+            <Action 
+              title="Start New Dictation" 
+              icon={Icon.ArrowClockwise} 
+              onAction={() => {
                 setTranscribedText("");
                 setErrorMessage("");
-                 showToast({ title: "Ready for new dictation", message: "Close and reopen command" });
-             }} />
+                showToast({ title: "Ready for new dictation", message: "Close and reopen command" });
+              }} 
+            />
           </ActionPanel>
         );
+
         case "transcribing":
         return (
           <ActionPanel>
@@ -302,6 +335,7 @@ const generateWaveformMarkdown = useCallback(() => {
             }}/>
           </ActionPanel>
         );
+
        case "error":
          return (
            <ActionPanel>
@@ -314,6 +348,7 @@ const generateWaveformMarkdown = useCallback(() => {
               <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
            </ActionPanel>
          );
+
       default: 
         return (
            <ActionPanel>
@@ -325,9 +360,8 @@ const generateWaveformMarkdown = useCallback(() => {
 
    const getPlaceholder = () => {
      switch (state) {
-      case "recording": return "Recording... Press Enter to stop.";
       case "transcribing": return "Transcribing audio...";
-      case "done": return "Transcribed Text...";
+      case "done": return "*crickets chirping*";
       case "error": return `Error: ${errorMessage}`;
       default: return "Initializing...";
      }
