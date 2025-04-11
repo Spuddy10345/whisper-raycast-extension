@@ -4,7 +4,10 @@
   "description": "Speech-to-text using whisper.cpp",
   "icon": "extension-icon.png",
   "author": "finjo",
-  "categories": ["Productivity", "AI"],
+  "categories": [
+    "Productivity",
+    "AI"
+  ],
   "license": "MIT",
   "commands": [
     {
@@ -55,12 +58,13 @@
     }
   ],
   "dependencies": {
-    "@raycast/api": "^1.55.2"
+    "@raycast/api": "1.95.0"
   },
   "devDependencies": {
     "@raycast/utils": "^1.8.0",
     "@types/node": "^18.8.3",
-    "@types/react": "^18.0.9",
+    "@types/react": "19.0.10",
+    "@types/react-dom": "^19.1.2",
     "typescript": "^5.0.0"
   },
   "scripts": {
