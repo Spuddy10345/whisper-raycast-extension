@@ -9,10 +9,21 @@ import {
   Detail,
   getPreferenceValues,
   Clipboard,
+  environment,
+  LocalStorage,
+  launchCommand,
+  LaunchType,
+  showHUD,
+  openExtensionPreferences,
+  confirmAlert,
+  Alert,
 } from "@raycast/api";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { spawn, exec } from "child_process";
 import type { ChildProcessWithoutNullStreams } from "child_process";
+import path from 'path';
+import fs from 'fs';
+import { showFailureToast, useCachedState } from "@raycast/utils"; 
 
 interface Preferences {
   whisperExecutable: string;
@@ -21,377 +32,536 @@ interface Preferences {
 }
 
 // Paths
+const SOX_PATH = "/opt/homebrew/bin/sox"; 
+const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav"); 
+const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
 const preferences = getPreferenceValues<Preferences>();
-const SOX_PATH = "/opt/homebrew/bin/sox";
-const WHISPER_CPP_PATH = "/Users/finjo/Documents/Raycast/whisper.cpp/build/bin/whisper-cli";
-const MODEL_PATH = "/Users/finjo/Documents/Raycast/whisper.cpp/models/ggml-base.en.bin";
-const AUDIO_FILE_PATH = "/tmp/raycast_dictate_audio.wav"; 
-const DEFAULT_ACTION = preferences.defaultAction || "none";
 
 // Define states
-type CommandState = "idle" | "recording" | "transcribing" | "done" | "error";
+type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
+interface Config {
+  execPath: string;
+  modelPath: string;
+}
 
 export default function Command() {
-  const [state, setState] = useState<CommandState>("idle");
+  const [state, setState] = useState<CommandState>("configuring");
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const soxProcessRef = useRef<ChildProcessWithoutNullStreams | null>(null);
   const [waveformSeed, setWaveformSeed] = useState<number>(0);
+  const [config, setConfig] = useState<Config | null>(null); 
 
+  const DEFAULT_ACTION = preferences.defaultAction || "none";
 
-  // Stable cleanup function
+  // Cleanup function for Sox process and audio file
   const cleanupSoxProcess = useCallback(() => {
     if (soxProcessRef.current) {
       console.log("Cleaning up sox process...");
-      // Check if process is still running before killing
       if (!soxProcessRef.current.killed) {
-          try {
-             soxProcessRef.current.kill("SIGTERM"); // Send SIGTERM
-          } catch (e) {
-              console.warn("Error sending SIGTERM", e);
+        try {
+          // Attempt graceful shutdown 
+          process.kill(soxProcessRef.current.pid!, "SIGTERM"); 
+          console.log(`Sent SIGTERM to PID ${soxProcessRef.current.pid}`);
+        } catch (e) {
+          console.warn("Error sending SIGTERM/SIGKILL", e);
+        }
+      }
+      soxProcessRef.current = null;
+    }
+    // Clean up audio file using fs.promises for async/await pattern
+    fs.promises.unlink(AUDIO_FILE_PATH)
+      .then(() => console.log("Cleaned up audio file."))
+      .catch((err) => {
+          if (err.code !== 'ENOENT') {
+             console.error("Error cleaning up audio file:", err.message);
           }
-      }
-      soxProcessRef.current = null;
-    }
-     // Clean up audio file
-    exec(`rm -f ${AUDIO_FILE_PATH}`, (err) => {
-        if (err) console.error("Error cleaning up audio file:", err.message);
-        else console.log("Cleaned up audio file.");
-    });
-  }, []);
+      });
+  }, []); 
 
-
-  // Start recording on mount
+  // Effect for checking config (exec and model path)
   useEffect(() => {
-    // should only run once on mount
-    console.log("useEffect mount: Setting state to recording.");
-    setState("recording");
-    showToast({ style: Toast.Style.Animated, title: "Recording...", message: "Press Enter to stop" });
+    let isMounted = true; 
 
-    const args = ["-d", "-t", "wav", AUDIO_FILE_PATH];
-    let process: ChildProcessWithoutNullStreams | null = null;
-    try {
-        process = spawn(SOX_PATH, args);
-        soxProcessRef.current = process;
-        console.log("Spawned sox process.");
-    } catch (err: any) {
-        console.error("sox spawn synchronous error:", err);
-        setErrorMessage(`Failed to start recording command. Error: ${err.message}`);
-        setState("error");
-        return; // Don't attach listeners if failed to start
+    async function checkConfiguration() {
+      if (!isMounted) return;
+      setState("configuring");
+      console.log("Starting configuration check...");
+
+      let execPath = preferences.whisperExecutable;
+      let modelPath = "";
+
+      // Validate Executable Path
+      if (!execPath || !fs.existsSync(execPath)) {
+        console.error(`Whisper executable check failed: '${execPath}'`);
+        const errorMsg = `Whisper executable not found at '${execPath || "not set"}'. Please install 'whisper-cpp' (e.g., 'brew install whisper-cpp') or set the correct path in preferences.`;
+        setErrorMessage(errorMsg);
+        if (isMounted) setState("error");
+        await showFailureToast(errorMsg, {
+            title: "Whisper Executable Not Found",
+            primaryAction: {
+                title: "Open Extension Preferences",
+                onAction: () => openExtensionPreferences(),
+            }
+        });
+        return;
+      }
+      console.log("Using executable:", execPath);
+
+      // Determine Model Path (LocalStorage > Preference Override)
+      try {
+        const downloadedPath = await LocalStorage.getItem<string>(DOWNLOADED_MODEL_PATH_KEY);
+        const prefPath = preferences.modelPath;
+
+        console.log("Pref Path:", prefPath);
+        console.log("Downloaded Path:", downloadedPath);
+
+
+        if (prefPath && fs.existsSync(prefPath)) {
+          console.log("Using preference override model path:", prefPath);
+          modelPath = prefPath;
+        } else if (downloadedPath && fs.existsSync(downloadedPath)) {
+          console.log("Using downloaded model path:", downloadedPath);
+          modelPath = downloadedPath;
+        } else {
+          console.error("No valid Whisper model found. Checked Pref:", prefPath, "Checked LocalStorage:", downloadedPath);
+          const errorMsg = "No Whisper model found. Please run the 'Download Whisper Model' command or configure the path in preferences.";
+          setErrorMessage(errorMsg);
+           if (isMounted) setState("error");
+          await showFailureToast(errorMsg, {
+              title: "Whisper Model Not Found",
+              primaryAction: {
+                 title: "Download Model",
+                 onAction: async () => {
+                     await launchCommand({ name: "download-model", type: LaunchType.UserInitiated });
+                     closeMainWindow(); // Close command after launching downloader
+                 }
+              }
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to determine model path:", error);
+        const errorMsg = "Error accessing configuration. Check console logs.";
+        setErrorMessage(errorMsg);
+        if (isMounted) setState("error");
+        await showFailureToast(errorMsg, { title: "Configuration Error" });
+        return;
+      }
+
+      // Config successful
+      console.log("Configuration successful:", { execPath, modelPath });
+      if (isMounted) {
+          setConfig({ execPath, modelPath });
+          setErrorMessage(""); // Clear any previous error
+          setState("idle"); // Ready to record
+      }
     }
 
+    checkConfiguration();
 
-    process.on('error', (err) => {
-      console.error("sox process error event:", err);
-      setErrorMessage(`Recording process failed. Error: ${err.message}`);
-      setState("error");
-      soxProcessRef.current = null;
-    });
-
-    process.stderr.on('data', (data) => {
-      const output = data.toString();
-      console.log(`sox stderr: ${data}`);
-    });
-
-
-    process.on('close', (code, signal) => {
-      console.log(`sox process closed. Code: ${code}, Signal: ${signal}`);
-      // Ensure ref is nullified if the process closes itself
-      if (soxProcessRef.current === process) {
-          soxProcessRef.current = null;
-          console.log("Cleared sox process ref due to close event.");
-      }
-    });
-
-    // Cleanup function on component unmount
+    // Cleanup function for effect
     return () => {
-      console.log("useEffect cleanup: Component unmounting or dependency changed.");
-      cleanupSoxProcess();
+        isMounted = false;
+        console.log("checkConfiguration effect cleanup");
     };
-  }, []); // Use empty dependency array to ensure it runs only once on mount
+  }, [preferences.whisperExecutable, preferences.modelPath]); // Rerun only if prefs change
 
 
-  const stopRecordingAndTranscribe = async () => {
-    // Read 'state' directly from the current render's scope
-    console.log(`stopRecordingAndTranscribe called. Current state from scope: ${state}`);
+  // Effect to Start/Stop Recording 
+   useEffect(() => {
+    let isMounted = true; // Track mounted state 
+
+    if (state === "idle" && config) {
+      // Ensure dir for audio file exists
+      const audioDir = path.dirname(AUDIO_FILE_PATH);
+      fs.promises.mkdir(audioDir, { recursive: true })
+          .then(() => {
+              if (!isMounted) return; // Check mount status after async 
+              console.log("Configuration ready, starting recording.");
+              if (isMounted) setState("recording"); // Move to recording only if still mounted
+              showToast({ style: Toast.Style.Animated, title: "Recording...", message: "Press Enter to stop" });
+
+              // Check SOX_PATH exist
+              if (!fs.existsSync(SOX_PATH)) {
+                 console.error(`sox executable not found at: ${SOX_PATH}`);
+                 setErrorMessage(`sox executable not found at '${SOX_PATH}'. Please install SoX (e.g., 'brew install sox').`);
+                 if (isMounted) setState("error");
+                 return;
+              }
+              fs.promises.mkdir(path.dirname(AUDIO_FILE_PATH), { recursive: true })
+              .then(() => {
+                  // spawn sox process 
+                  const args = [
+                     "-d", // Default device
+                     "-t", "wav", // Output WAV
+                     "--channels", "1", // Mono 
+                     "--rate", "16000", // Sample rate for whisper
+                     "--encoding", "signed-integer", // 16-bit PCM
+                     "--bits", "16",
+                     AUDIO_FILE_PATH,
+                   ];
+                  let process: ChildProcessWithoutNullStreams | null = null;
+                  try {
+                     process = spawn(SOX_PATH, args);
+                     soxProcessRef.current = process;
+                     console.log(`Spawned sox process with PID: ${process.pid}`);
+                  } catch (err: any) {
+                     console.error("sox spawn synchronous error:", err);
+                     setErrorMessage(`Failed to start recording command. Error: ${err.message}`);
+                     if (isMounted) setState("error");
+                     return; // Return from inner .then callback
+                  }
+
+                  process.on('error', (err) => {
+                     console.error(`sox process PID ${process?.pid} error event:`, err);
+                     // Avoid setting state if unmounted or error already occurred
+                     if (isMounted && state !== 'error') {
+                         setErrorMessage(`Recording process failed. Error: ${err.message}`);
+                         setState("error");
+                     }
+                     soxProcessRef.current = null; // Clear ref on error
+                  });
+
+                  process.stderr.on('data', (data) => {
+                     console.log(`sox stderr PID ${process?.pid}: ${data.toString()}`);
+                  });
+
+                  process.on('close', (code, signal) => {
+                     console.log(`sox process PID ${process?.pid} closed. Code: ${code}, Signal: ${signal}`);
+                     if (soxProcessRef.current === process) {
+                      soxProcessRef.current = null;
+                      console.log("Cleared sox process ref due to close event.");
+                     }
+                  });
+               }) 
+              .catch(err => { 
+                 console.error("Error creating specific audio file directory:", err);
+                 if (isMounted) {
+                    setErrorMessage(`Failed to prepare audio file directory: ${err.message}`);
+                    setState("error");
+                 }
+              }); 
+           }) 
+          .catch(err => { 
+             console.error("Error creating base audio directory:", err);
+             if (isMounted) {
+                setErrorMessage(`Failed to prepare base audio directory: ${err.message}`);
+                setState("error");
+             }
+          }); 
+    } 
+
+    //Ensure process is stopped if component unmounts or dependencies change
+    return () => {
+      isMounted = false; // Mark as unmounted
+      console.log(`useEffect [state, config] cleanup. State during cleanup: ${state}`);
+  
+      // Only stop process if still referenced and not been killed
+      if (soxProcessRef.current) {
+        const processToCleanup = soxProcessRef.current;
+        console.log(`useEffect cleanup: Attempting to stop lingering sox process PID ${processToCleanup.pid}`);
+        soxProcessRef.current = null; // Clear ref
+        if (!processToCleanup.killed) {
+          try {
+            //SIGKILL to ensure killed as last resort
+            process.kill(processToCleanup.pid!, "SIGKILL");
+            console.log(`useEffect cleanup: Sent SIGKILL to PID ${processToCleanup.pid}`);
+          } catch (e) {
+            // Ignore errors like 'process already exited'
+            if (e instanceof Error && 'code' in e && e.code !== 'ESRCH') {
+               console.warn(`useEffect cleanup: Error sending SIGKILL to PID ${processToCleanup.pid}:`, e);
+            }
+          }
+        }
+      } else {
+          console.log("useEffect cleanup: No active sox process ref found.");
+      }
+    };
+  }, [state, config, cleanupSoxProcess]);
+
+  // Effect for waveform animation
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    if (state === "recording") {
+      intervalId = setInterval(() => {
+        setWaveformSeed(prev => prev + 1);
+      }, 150);
+    }
+    // Cleanup interval on unmount or when state changes
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [state]);
+
+  const stopRecordingAndTranscribe = useCallback(async () => {
+    // Use the current state value directly from the hook
+    console.log(`stopRecordingAndTranscribe called. Current state: ${state}`);
 
     if (state !== "recording") {
-       console.warn(`stopRecordingAndTranscribe: State is '${state}', expected 'recording'. Aborting stop sequence.`);
-       return;
+      console.warn(`stopRecordingAndTranscribe: State is '${state}', expected 'recording'. Aborting.`);
+      return;
     }
 
-    const processToStop = soxProcessRef.current; // Capture ref value 
-
-    if (!processToStop) {
-        console.error("stopRecordingAndTranscribe: No process reference found, though state was 'recording'.");
-        setErrorMessage("Could not stop recording process. Reference lost.");
-        setState("error");
-        return;
+    if (!config) {
+      console.error("stopRecordingAndTranscribe: Configuration not available.");
+      setErrorMessage("Configuration error occurred before transcription.");
+      setState("error");
+      return;
     }
 
-    // Set state 
+    // Capture current process reference 
+    const processToStop = soxProcessRef.current;
+
+    // Move to transcribing state
     setState("transcribing");
     showToast({ style: Toast.Style.Animated, title: "Transcribing..." });
-    console.log("Stopping recording...");
+    console.log("Set state to transcribing.");
 
-    soxProcessRef.current = null;
-    console.log("Cleared sox process ref before killing.");
-
-
-    // Send SIGTERM first 
-    console.log("Sending SIGTERM to process...");
-    processToStop.kill("SIGTERM");
-
-
-    // Wait for the process to close or timeout
-    const closePromise = new Promise<void>(resolve => {
-       const timeout = setTimeout(() => {
-          console.warn("Timeout waiting for sox process close after SIGTERM.");
-          resolve();
-       }, 1000); // Wait 1 second max
-
-       processToStop.on('close', (code, signal) => {
-          clearTimeout(timeout);
-          console.log(`sox process confirmed closed during stop. Code: ${code}, Signal: ${signal}`);
-          resolve();
-       });
-
-       processToStop.on('error', (err) => { // Handle errors during shutdown too
-          clearTimeout(timeout);
-          console.error("Error during sox process shutdown:", err);
-          resolve(); // Resolve anyway to allow transcription attempt
-       });
-    });
-
-    await closePromise;
-
-
-    // Check if it's still somehow alive 
-    if (!processToStop.killed) {
-       console.log("SoX process still alive after SIGTERM and wait, sending SIGKILL.");
-       try {
-           processToStop.kill("SIGKILL"); // Force kill if needed
-       } catch (e) {
-           console.warn("Error sending SIGKILL (process might be already dead):", e);
-       }
+    // Stop sox process if running
+    if (processToStop) {
+        console.log(`Attempting to stop recording process PID: ${processToStop.pid}...`);
+        soxProcessRef.current = null; // Clear ref, or else...
+        console.log("Cleared sox process ref.");
+        try {
+           if (!processToStop.killed) {
+               process.kill(processToStop.pid!, "SIGTERM"); 
+               console.log(`Sent SIGTERM to PID ${processToStop.pid}`);
+           } else {
+              console.log(`Process ${processToStop.pid} was already killed.`);
+           }
+        } catch (e) {
+          console.warn(`Error stopping sox process PID ${processToStop.pid}:`, e);
+          // Transcribe even if stopping fails
+        }
+    } else {
+         console.warn("stopRecordingAndTranscribe: No active sox process reference found to stop.");
     }
 
 
-    console.log("Starting transcription...");
+    //delay to ensure audio file written
+    await new Promise(resolve => setTimeout(resolve, 400)); 
+
+    console.log(`Checking for audio file: ${AUDIO_FILE_PATH}`);
+
+    try {
+      const stats = await fs.promises.stat(AUDIO_FILE_PATH);
+      console.log(`Audio file stats: ${JSON.stringify(stats)}`);
+      
+      // Check if file exists and has expected size (e.g., > 44 bytes for WAV header)
+      if (stats.size <= 44) {
+        throw new Error(`Audio file is empty or too small (size: ${stats.size} bytes). Recording might have failed or captured no sound.`);
+      }
+      
+      console.log(`Audio file exists and has size ${stats.size}. Proceeding with transcription.`);
+    } catch (fileError: any) {
+      console.error(`Audio file check failed: ${AUDIO_FILE_PATH}`, fileError);
+      // specific error message based on the error code
+      const errorMsg = fileError.code === 'ENOENT'
+        ? `Transcription failed: Audio file not found. Recording might have failed.`
+        : `Transcription failed: Cannot access audio file. ${fileError.message}`;
+      setErrorMessage(errorMsg);
+      setState("error");
+      cleanupSoxProcess(); 
+      return;
+    }
+
+    console.log(`Starting transcription with model: ${config.modelPath}`);
+
+    // Execute whisper-cli
     exec(
-      `${WHISPER_CPP_PATH} -m ${MODEL_PATH} -f ${AUDIO_FILE_PATH} -l en -otxt`,
+      // Use quotes around paths to handle spaces
+      `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps`, 
       async (error, stdout, stderr) => {
+        // Always clean up audio file after exec finishes
+        cleanupSoxProcess();
+
         if (error) {
           console.error("whisper error:", error);
           console.error("whisper stderr:", stderr);
-          setErrorMessage(`Transcription failed: ${stderr || error.message}`);
+          const errMsg = stderr?.includes("invalid model") ? `Invalid or incompatible model file: ${config.modelPath}` :
+                         stderr?.includes("failed to load model") ? `Failed to load model: ${config.modelPath}` :
+                         `Transcription failed: ${stderr || error.message}`;
+          setErrorMessage(errMsg);
           setState("error");
         } else {
           console.log("Transcription successful.");
-          const trimmedText = stdout.trim().replace(/^\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*/, '');
+          const trimmedText = stdout.trim();
           setTranscribedText(trimmedText);
           setState("done");
-          
-          // Call handler for automatic action
+
           await handleTranscriptionComplete(trimmedText);
         }
-        // Clean up audio file regardless of success/failure
-        exec(`rm -f ${AUDIO_FILE_PATH}`, (err) => {
-          if (err) console.error("Error cleaning up audio file post-transcription:", err.message);
-          else console.log("Cleaned up audio file post-transcription.");
-        });
       }
     );
-  };
+  }, [state, config, cleanupSoxProcess]);
 
 
-// Animate waveform
-useEffect(() => {
-  if (state === "recording") {
-    const intervalId = setInterval(() => {
-      setWaveformSeed(prev => prev + 1);
-    }, 150);
-    
-    return () => clearInterval(intervalId);
-  }
-}, [state]);
+  const generateWaveformMarkdown = useCallback(() => {
+    const waveformHeight = 18;
+    const waveformWidth = 105;
+    let waveform = "```\n"; // Start md code block
+    waveform += "RECORDING AUDIO... PRESS ENTER TO STOP\n\n"; 
 
-// Generate the waveform 
-const generateWaveformMarkdown = useCallback(() => {
-  // Control waveform height/width
-  const waveformHeight = 18;
-  const waveformWidth = 105;
-  
-  // Create a sine wave pattern with randomness
-  let waveform = "";
-  
-  // Add a small header in the waveform area
-  waveform += "RECORDING AUDIO... PRESS ENTER TO STOP\n\n";
-  
-  // Generate waveform pattern
-  for (let y = 0; y < waveformHeight; y++) {
-    let line = "";
-    for (let x = 0; x < waveformWidth; x++) {
-      const baseAmplitude1 = Math.sin((x / waveformWidth) * Math.PI * 4) * 0.3;
-      const baseAmplitude2 = Math.sin((x / waveformWidth) * Math.PI * 8) * 0.15;
-      const baseAmplitude3 = Math.sin((x / waveformWidth) * Math.PI * 2) * 0.25;
-      const baseAmplitude = baseAmplitude1 + baseAmplitude2 + baseAmplitude3;
-      
-      // Add randomness that changes with each go around
-      const randomFactor = Math.sin(x + waveformSeed * 0.3) * 0.2;
-      const amplitude = baseAmplitude + randomFactor;
-      
-      // Normalize to waveform height
-      const normalizedAmplitude = (amplitude + 0.7) * waveformHeight * 0.5;
-      
-      // Determine character to display
-      const distFromCenter = Math.abs(y - waveformHeight/2);
-      const shouldDraw = distFromCenter < normalizedAmplitude;
-      
-      if (shouldDraw) {
-        const intensity = 1 - (distFromCenter / normalizedAmplitude);
-        if (intensity > 0.8) line += "█";
-        else if (intensity > 0.6) line += "▓";
-        else if (intensity > 0.4) line += "▒";
-        else if (intensity > 0.2) line += "░";
-        else line += "·";
-      } else {
-        line += " ";
+    for (let y = 0; y < waveformHeight; y++) {
+      let line = "";
+      for (let x = 0; x < waveformWidth; x++) {
+        const baseAmplitude1 = Math.sin((x / waveformWidth) * Math.PI * 4) * 0.3;
+        const baseAmplitude2 = Math.sin((x / waveformWidth) * Math.PI * 8) * 0.15;
+        const baseAmplitude3 = Math.sin((x / waveformWidth) * Math.PI * 2) * 0.25;
+        const baseAmplitude = baseAmplitude1 + baseAmplitude2 + baseAmplitude3;
+        const randomFactor = Math.sin(x + waveformSeed * 0.3) * 0.2;
+        const amplitude = baseAmplitude + randomFactor;
+        const normalizedAmplitude = (amplitude + 0.7) * waveformHeight * 0.5;
+        const distFromCenter = Math.abs(y - waveformHeight / 2);
+        const shouldDraw = distFromCenter < normalizedAmplitude;
+
+        if (shouldDraw) {
+          const intensity = 1 - (distFromCenter / normalizedAmplitude);
+          if (intensity > 0.8) line += "█";
+          else if (intensity > 0.6) line += "▓";
+          else if (intensity > 0.4) line += "▒";
+          else if (intensity > 0.2) line += "░";
+          else line += "·";
+        } else {
+          line += " ";
+        }
       }
+      waveform += line + "\n";
     }
-    waveform += line + "\n";
-  }
-  return `\`\`\`\n${waveform}\`\`\``;
-}, [waveformSeed]);
+    waveform += "```"; // End md code block
+    return waveform;
+  }, [waveformSeed]);
 
-const handleTranscriptionComplete = useCallback(async (text: string) => {
-  // Automatically paste
-  if (DEFAULT_ACTION === "paste") {
-    await Clipboard.paste(text);
-    showToast({ style: Toast.Style.Success, title: "Pasted transcribed text" });
-    cleanupSoxProcess();
-    closeMainWindow();
-  } else if (DEFAULT_ACTION === "copy") {
-    // Automatically copy
-    await Clipboard.copy(text);
-    showToast({ style: Toast.Style.Success, title: "Copied to clipboard" });
-    cleanupSoxProcess();
-    closeMainWindow();
-  } else {
-    // Default action (none preference selected)
-    showToast({ style: Toast.Style.Success, title: "Transcription complete" });
-  }
-}, []);
+  const handleTranscriptionComplete = useCallback(async (text: string) => {
+    cleanupSoxProcess(); // Ensure cleanup happens *before* potential closeMainWindow
+
+    // Prefs to copy/paste immediately
+    if (DEFAULT_ACTION === "paste") {
+      await Clipboard.paste(text);
+      await showHUD("Pasted transcribed text"); 
+      closeMainWindow({ clearRootSearch: true });
+    } else if (DEFAULT_ACTION === "copy") {
+      await Clipboard.copy(text);
+      await showHUD("Copied to clipboard");
+      closeMainWindow({ clearRootSearch: true });
+    } else {
+      // Action is "none", stay in "done" state
+      showToast({ style: Toast.Style.Success, title: "Transcription complete" });
+    }
+  }, [DEFAULT_ACTION, cleanupSoxProcess]);
 
 
-  const getActionPanel = () => {
-    console.log(`getActionPanel called. Current state: ${state}`); 
+  const getActionPanel = useCallback(() => {
+     // Pass the necessary functions/state directly if needed, or ensure they are stable via useCallback
     switch (state) {
       case "recording":
         return (
           <ActionPanel>
-             {/* Wrap onAction to ensure latest callback reference is used */}
-            <Action title="Stop Recording" icon={Icon.Stop} onAction={() => stopRecordingAndTranscribe()} />
+            {/* Use callback directly */}
+            <Action title="Stop and Transcribe" icon={Icon.Stop} onAction={stopRecordingAndTranscribe} />
             <Action title="Cancel Recording" icon={Icon.XMarkCircle} shortcut={{ modifiers: ["cmd"], key: "." }} onAction={() => {
                cleanupSoxProcess();
                closeMainWindow();
             }}/>
           </ActionPanel>
         );
-
-        case "done":
+      case "done":
         return (
           <ActionPanel>
-            <Action.Paste 
-              title={DEFAULT_ACTION === "paste" ? "Paste Text (Default)" : "Paste Text"} 
-              content={transcribedText} 
-              onPaste={cleanupSoxProcess}
+            <Action.Paste
+              title={DEFAULT_ACTION === "paste" ? "Paste Text (Default)" : "Paste Text"}
+              content={transcribedText}
+              onPaste={() => closeMainWindow({ clearRootSearch: true })} // Close after paste
             />
-            <Action.CopyToClipboard 
-              title={DEFAULT_ACTION === "copy" ? "Copy Text (Default)" : "Copy Text"} 
-              content={transcribedText} 
-              shortcut={{ modifiers: ["cmd"], key: "enter" }} 
-              onCopy={cleanupSoxProcess}
+            <Action.CopyToClipboard
+              title={DEFAULT_ACTION === "copy" ? "Copy Text (Default)" : "Copy Text"}
+              content={transcribedText}
+              shortcut={{ modifiers: ["cmd"], key: "enter" }}
+              onCopy={() => closeMainWindow({ clearRootSearch: true })} // Close after copy
             />
-            <Action 
-              title="Start New Dictation" 
-              icon={Icon.ArrowClockwise} 
-              onAction={() => {
-                setTranscribedText("");
-                setErrorMessage("");
-                showToast({ title: "Ready for new dictation", message: "Close and reopen command" });
-              }} 
-            />
+            <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
           </ActionPanel>
         );
-
-        case "transcribing":
-        return (
-          <ActionPanel>
-             <Action title="Cancel Transcription" icon={Icon.XMarkCircle} shortcut={{ modifiers: ["cmd"], key: "." }} onAction={() => {
-               cleanupSoxProcess(); // Clean up audio file 
-               closeMainWindow();
-            }}/>
-          </ActionPanel>
-        );
-
-       case "error":
+      case "transcribing":
+        // No actions available during transcription
+         return null; 
+      case "error":
          return (
            <ActionPanel>
-               <Action title="Start New Dictation" icon={Icon.ArrowClockwise} onAction={() => {
-                  setErrorMessage(""); // Clear error
-
-                  closeMainWindow();
-                  showToast({ title: "Please reopen command", style: Toast.Style.Failure });
-               }} />
+              {/* Allow to quickly open preferences if config error */}
+              <Action title="Open Extension Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
+              <Action title="Retry (Reopen Command)" icon={Icon.ArrowClockwise} onAction={() => {
+                   closeMainWindow();
+                   // Maybe show a HUD instructing user to reopen
+                   showHUD("Please reopen the Dictate Text command.");
+               }}/>
+               <Action title="Download Model" icon={Icon.Download} onAction={async () => {
+                   await launchCommand({ name: "download-model", type: LaunchType.UserInitiated });
+                   closeMainWindow();
+               }}/>
               <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
            </ActionPanel>
          );
-
-      default: 
+      default: // idle, configuring
         return (
            <ActionPanel>
               <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
            </ActionPanel>
         );
     }
-  };
+  }, [state, stopRecordingAndTranscribe, transcribedText, cleanupSoxProcess, DEFAULT_ACTION]);
 
-   const getPlaceholder = () => {
-     switch (state) {
-      case "transcribing": return "Transcribing audio...";
-      case "done": return "*crickets chirping*";
-      case "error": return `Error: ${errorMessage}`;
-      default: return "Initializing...";
-     }
+  if (state === "configuring") {
+    // while checking config, show loading
+    return <Detail isLoading={true} markdown={"Checking Whisper configuration..."} />;
   }
 
+  if (state === "recording") {
+    // Show waveform while recording
+    return (
+      <Detail
+        markdown={generateWaveformMarkdown()}
+        actions={getActionPanel()}
+      />
+    );
+  }
+
+  //Dictation UI
   return (
-    <>
-      {state === "recording" && (
-        <Detail
-          markdown={generateWaveformMarkdown()}
-          actions={getActionPanel()}
-        />
+    <Form
+      isLoading={state === "transcribing"}
+      actions={getActionPanel()}
+      // Add navigationTitle based on state for clarity
+      navigationTitle={
+         state === "transcribing" ? "Transcribing..." :
+         state === "done" ? "Transcription Result" :
+         state === "error" ? "Error" :
+         "Whisper Dictation"
+      }
+    >
+      {state === "error" && (
+           <Form.Description title="Error" text={errorMessage} />
       )}
-      
-      {state !== "recording" && (
-        <Form
-          isLoading={state === "transcribing"}
-          actions={getActionPanel()}
-        >
+       {(state === "done" || state === "transcribing" || state === 'idle') && ( 
           <Form.TextArea
             id="dictatedText"
-            title="Dictated Text"
-            placeholder={getPlaceholder()}
-            value={state === 'done' ? transcribedText : (state === 'error' ? errorMessage : "")}
-            onChange={setTranscribedText}
+            title={state === 'done' ? "Dictated Text" : ""} // Hide title unless done
+            placeholder={
+                state === 'transcribing' ? "Transcribing audio..." :
+                state === 'done' ? "Transcription result" :
+                "Waiting to start..." // idle state text
+            }
+            value={state === 'done' ? transcribedText : ""} // Only show text when done
+            onChange={setTranscribedText} 
           />
-          {state === 'error' && <Form.Description text={`${errorMessage}`} />}
-        </Form>
-      )}
-    </>
+       )}
+       {/* Optionally show a message during transcription */}
+       {state === 'transcribing' && (
+           <Form.Description text="Processing audio, please wait..." />
+       )}
+    </Form>
   );
-
 }

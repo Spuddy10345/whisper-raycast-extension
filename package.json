@@ -15,24 +15,31 @@
       "title": "Dictate Text",
       "description": "Convert speech to text using Whisper",
       "mode": "view"
+    },
+    {
+      "title": "Download Whisper Model",
+      "name": "download-model",
+      "description": "Choose and download a model for transcription",
+      "mode": "view"
     }
   ],
   "preferences": [
     {
       "name": "whisperExecutable",
       "type": "textfield",
-      "required": true,
+      "required": false,
       "title": "Whisper Executable Path",
       "description": "Path to whisper-cpp main executable",
-      "placeholder": "/Users/finjo/Documents/Raycast/whisper.cpp/main"
+      "default": "/opt/homebrew/Cellar/whisper-cpp/1.7.5/bin/whisper-cli",
+      "placeholder": "/opt/homebrew/Cellar/whisper-cpp/1.7.5/bin/whisper-cli"
     },
     {
       "name": "modelPath",
       "type": "textfield",
-      "required": true,
+      "required": false,
       "title": "Whisper Model Path",
       "description": "Path to Whisper model file (.bin)",
-      "placeholder": "/Users/finjo/Documents/Raycast/whisper.cpp/models/ggml-base.en.bin"
+      "placeholder": "/path/to/your/ggml-MODEL.bin"
     },
     {
       "description": "Action to perform automatically after transcription completes",
@@ -63,7 +70,7 @@
   "devDependencies": {
     "@raycast/utils": "^1.8.0",
     "@types/node": "^18.8.3",
-    "@types/react": "19.0.10",
+    "@types/react": "^19.1.1",
     "@types/react-dom": "^19.1.2",
     "typescript": "^5.0.0"
   },
