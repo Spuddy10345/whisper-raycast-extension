@@ -27,28 +27,28 @@
     {
       "name": "whisperExecutable",
       "type": "textfield",
-      "required": false,
+      "required": true,
       "title": "Whisper Executable Path",
-      "description": "Path to whisper-cpp main executable",
-      "default": "/opt/homebrew/Cellar/whisper-cpp/1.7.5/bin/whisper-cli",
-      "placeholder": "/opt/homebrew/Cellar/whisper-cpp/1.7.5/bin/whisper-cli"
+      "description": "Path to whisper-cpp main executable. Default assumes Homebrew on Apple Silicon. Check /usr/local/bin/whisper-cli for Intel.",
+      "default": "/opt/homebrew/bin/whisper-cli",
+      "placeholder": "/opt/homebrew/bin/whisper-cli"
     },
     {
       "name": "modelPath",
       "type": "textfield",
       "required": false,
       "title": "Whisper Model Path",
-      "description": "Path to Whisper model file (.bin)",
+      "description": "Path to your custom Whisper model file (.bin). Handled automatically if model downloaded through extension.",
       "placeholder": "/path/to/your/ggml-MODEL.bin"
     },
     {
       "name": "soxExecutablePath",
       "title": "SoX Executable Path",
-      "description": "Full path to the 'sox' command-line audio utility.",
+      "description": "Full path to the 'sox' command-line audio utility. Default assumes Homebrew on Apple Silicon. Check /usr/local/bin/sox for Intel.",
       "type": "textfield",
-      "required": true, 
+      "required": true,
       "placeholder": "/opt/homebrew/bin/sox",
-      "default": "/opt/homebrew/bin/sox" 
+      "default": "/opt/homebrew/bin/sox"
     },
     {
       "description": "Action to perform automatically after transcription completes",
@@ -81,6 +81,9 @@
     "@types/node": "^18.8.3",
     "@types/react": "^19.1.1",
     "@types/react-dom": "^19.1.2",
+    "@typescript-eslint/eslint-plugin": "^8.29.1",
+    "@typescript-eslint/parser": "^8.29.1",
+    "eslint": "^9.24.0",
     "typescript": "^5.0.0"
   },
   "scripts": {
