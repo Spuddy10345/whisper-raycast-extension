@@ -28,11 +28,11 @@ import { showFailureToast, useCachedState } from "@raycast/utils";
 interface Preferences {
   whisperExecutable: string;
   modelPath: string;
+  soxExecutablePath: string;
   defaultAction: "paste" | "copy" | "none";
 }
 
 // Paths
-const SOX_PATH = "/opt/homebrew/bin/sox"; 
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav"); 
 const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
 const preferences = getPreferenceValues<Preferences>();
@@ -42,6 +42,7 @@ type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "don
 interface Config {
   execPath: string;
   modelPath: string;
+  soxPath: string;
 }
 
 export default function Command() {
@@ -52,6 +53,7 @@ export default function Command() {
   const [waveformSeed, setWaveformSeed] = useState<number>(0);
   const [config, setConfig] = useState<Config | null>(null); 
 
+  const preferences = getPreferenceValues<Preferences>();
   const DEFAULT_ACTION = preferences.defaultAction || "none";
 
   // Cleanup function for Sox process and audio file
@@ -81,20 +83,40 @@ export default function Command() {
 
   // Effect for checking config (exec and model path)
   useEffect(() => {
-    let isMounted = true; 
-
+    let isMounted = true;
+  
     async function checkConfiguration() {
       if (!isMounted) return;
       setState("configuring");
       console.log("Starting configuration check...");
-
-      let execPath = preferences.whisperExecutable;
-      let modelPath = "";
-
-      // Validate Executable Path
-      if (!execPath || !fs.existsSync(execPath)) {
-        console.error(`Whisper executable check failed: '${execPath}'`);
-        const errorMsg = `Whisper executable not found at '${execPath || "not set"}'. Please install 'whisper-cpp' (e.g., 'brew install whisper-cpp') or set the correct path in preferences.`;
+  
+      // Read all prefs
+      const prefs = getPreferenceValues<Preferences>();
+      let whisperExecPath = prefs.whisperExecutable;
+      let modelOverridePath = prefs.modelPath;
+      let soxPath = prefs.soxExecutablePath; // Get SoX path from prefs
+  
+      // Validate sox path
+      if (!soxPath || !fs.existsSync(soxPath)) {
+         console.error(`SoX executable check failed: '${soxPath}'`);
+         const errorMsg = `SoX executable not found or not set at '${soxPath || "not set"}'. Please install SoX (e.g., 'brew install sox') and set the correct path in preferences.`;
+         setErrorMessage(errorMsg);
+         if (isMounted) setState("error");
+         await showFailureToast(errorMsg, {
+             title: "SoX Executable Not Found",
+             primaryAction: {
+                 title: "Open Extension Preferences",
+                 onAction: () => openExtensionPreferences(),
+             }
+         });
+         return; // Stop config check
+      }
+      console.log("Using SoX executable:", soxPath);
+  
+      // Validate whisper-cli path
+      if (!whisperExecPath || !fs.existsSync(whisperExecPath)) {
+        console.error(`Whisper executable check failed: '${whisperExecPath}'`);
+        const errorMsg = `Whisper executable not found at '${whisperExecPath || "not set"}'. Please install 'whisper.cpp' (e.g., 'brew install whisper-cpp') or set the correct path in preferences.`;
         setErrorMessage(errorMsg);
         if (isMounted) setState("error");
         await showFailureToast(errorMsg, {
@@ -106,28 +128,28 @@ export default function Command() {
         });
         return;
       }
-      console.log("Using executable:", execPath);
-
-      // Determine Model Path (LocalStorage > Preference Override)
+      console.log("Using Whisper executable:", whisperExecPath);
+  
+      // Get model path
+      let finalModelPath = "";
       try {
         const downloadedPath = await LocalStorage.getItem<string>(DOWNLOADED_MODEL_PATH_KEY);
-        const prefPath = preferences.modelPath;
-
-        console.log("Pref Path:", prefPath);
-        console.log("Downloaded Path:", downloadedPath);
-
-
-        if (prefPath && fs.existsSync(prefPath)) {
-          console.log("Using preference override model path:", prefPath);
-          modelPath = prefPath;
+  
+        console.log("Pref Model Override Path:", modelOverridePath);
+        console.log("Downloaded Model Path:", downloadedPath);
+  
+        // Prioritize Preference Path
+        if (modelOverridePath && fs.existsSync(modelOverridePath)) {
+          console.log("Using preference override model path:", modelOverridePath);
+          finalModelPath = modelOverridePath;
         } else if (downloadedPath && fs.existsSync(downloadedPath)) {
           console.log("Using downloaded model path:", downloadedPath);
-          modelPath = downloadedPath;
+          finalModelPath = downloadedPath;
         } else {
-          console.error("No valid Whisper model found. Checked Pref:", prefPath, "Checked LocalStorage:", downloadedPath);
-          const errorMsg = "No Whisper model found. Please run the 'Download Whisper Model' command or configure the path in preferences.";
+          console.error("No valid Whisper model found. Checked Pref Override:", modelOverridePath, "Checked LocalStorage:", downloadedPath);
+          const errorMsg = "No Whisper model found. Please run the 'Download Whisper Model' command or configure the path override in preferences.";
           setErrorMessage(errorMsg);
-           if (isMounted) setState("error");
+          if (isMounted) setState("error");
           await showFailureToast(errorMsg, {
               title: "Whisper Model Not Found",
               primaryAction: {
@@ -148,24 +170,30 @@ export default function Command() {
         await showFailureToast(errorMsg, { title: "Configuration Error" });
         return;
       }
-
-      // Config successful
-      console.log("Configuration successful:", { execPath, modelPath });
+  
+      // Config Successful
+      console.log("Configuration successful:", { whisperExecPath, finalModelPath, soxPath });
       if (isMounted) {
-          setConfig({ execPath, modelPath });
-          setErrorMessage(""); // Clear any previous error
-          setState("idle"); // Ready to record
+          // --- SET FULL CONFIG ---
+          setConfig({ execPath: whisperExecPath, modelPath: finalModelPath, soxPath: soxPath });
+          setErrorMessage("");
+          setState("idle");
       }
     }
-
+  
     checkConfiguration();
 
+
+    // Cleanup function for effect
+  
     // Cleanup function for effect
     return () => {
         isMounted = false;
         console.log("checkConfiguration effect cleanup");
     };
-  }, [preferences.whisperExecutable, preferences.modelPath]); // Rerun only if prefs change
+  // --- Rerun if ANY relevant preference changes ---
+  }, [preferences.whisperExecutable, preferences.modelPath, preferences.soxExecutablePath]);
+  
 
 
   // Effect to Start/Stop Recording 
@@ -179,16 +207,9 @@ export default function Command() {
           .then(() => {
               if (!isMounted) return; // Check mount status after async 
               console.log("Configuration ready, starting recording.");
-              if (isMounted) setState("recording"); // Move to recording only if still mounted
+              setState("recording"); 
               showToast({ style: Toast.Style.Animated, title: "Recording...", message: "Press Enter to stop" });
 
-              // Check SOX_PATH exist
-              if (!fs.existsSync(SOX_PATH)) {
-                 console.error(`sox executable not found at: ${SOX_PATH}`);
-                 setErrorMessage(`sox executable not found at '${SOX_PATH}'. Please install SoX (e.g., 'brew install sox').`);
-                 if (isMounted) setState("error");
-                 return;
-              }
               fs.promises.mkdir(path.dirname(AUDIO_FILE_PATH), { recursive: true })
               .then(() => {
                   // spawn sox process 
@@ -203,7 +224,7 @@ export default function Command() {
                    ];
                   let process: ChildProcessWithoutNullStreams | null = null;
                   try {
-                     process = spawn(SOX_PATH, args);
+                     process = spawn(config.soxPath, args);
                      soxProcessRef.current = process;
                      console.log(`Spawned sox process with PID: ${process.pid}`);
                   } catch (err: any) {
@@ -455,7 +476,6 @@ export default function Command() {
 
 
   const getActionPanel = useCallback(() => {
-     // Pass the necessary functions/state directly if needed, or ensure they are stable via useCallback
     switch (state) {
       case "recording":
         return (
@@ -495,7 +515,6 @@ export default function Command() {
               <Action title="Open Extension Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
               <Action title="Retry (Reopen Command)" icon={Icon.ArrowClockwise} onAction={() => {
                    closeMainWindow();
-                   // Maybe show a HUD instructing user to reopen
                    showHUD("Please reopen the Dictate Text command.");
                }}/>
                <Action title="Download Model" icon={Icon.Download} onAction={async () => {
@@ -558,7 +577,6 @@ export default function Command() {
             onChange={setTranscribedText} 
           />
        )}
-       {/* Optionally show a message during transcription */}
        {state === 'transcribing' && (
            <Form.Description text="Processing audio, please wait..." />
        )}

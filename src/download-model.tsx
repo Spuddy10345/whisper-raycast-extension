@@ -1,9 +1,9 @@
-import { List, ActionPanel, Action, environment, showToast, Toast, LocalStorage, Icon, confirmAlert, Alert } from "@raycast/api"; // Added confirmAlert, Alert
-import { useState, useEffect } from "react"; // Added useEffect
+import { List, ActionPanel, Action, environment, showToast, Toast, LocalStorage, Icon, confirmAlert, Alert } from "@raycast/api";
+import { useState, useEffect, useCallback } from "react"; // Added useCallback
 import * as https from 'https';
 import * as fs from 'fs';
 import * as path from 'path';
-import { showFailureToast, useCachedState } from "@raycast/utils"; // Added useCachedState
+import { showFailureToast, useCachedState } from "@raycast/utils";
 
 interface WhisperModel {
   key: string;
@@ -24,9 +24,8 @@ const models: WhisperModel[] = [
 ];
 
 const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
-const MODEL_DIR = path.join(environment.supportPath, "models"); // Define model directory path
+const MODEL_DIR = path.join(environment.supportPath, "models");
 
-// Checks if a model file exists
 async function checkModelExists(filename: string): Promise<boolean> {
     const filePath = path.join(MODEL_DIR, filename);
     try {
@@ -38,11 +37,35 @@ async function checkModelExists(filename: string): Promise<boolean> {
 }
 
 export default function DownloadModelCommand() {
-  const [isLoading, setIsLoading] = useState<string | false>(false); // Store model key when loading
-  const [downloadedModels, setDownloadedModels] = useCachedState<Record<string, boolean>>("downloadedModelsState", {}); // Cache downloaded status
+  const [isLoading, setIsLoading] = useState<string | false>(false);
+  const [downloadedModels, setDownloadedModels] = useCachedState<Record<string, boolean>>("downloadedModelsState", {});
+  const [activeModelPath, setActiveModelPath] = useState<string | null>(null);
 
- // Check existing models on mount
- useEffect(() => {
+// Check existing models on mount
+  useEffect(() => {
+    let isMounted = true;
+    LocalStorage.getItem<string>(DOWNLOADED_MODEL_PATH_KEY).then((storedPath) => {
+      if (isMounted && storedPath) {
+        // Check if stored path actually exists before setting
+        fs.promises.access(storedPath)
+          .then(() => {
+            if (isMounted) setActiveModelPath(storedPath);
+            console.log("Loaded and verified active model path:", storedPath);
+          })
+          .catch(() => {
+            console.log("Stored active model path not found, clearing LocalStorage.");
+            LocalStorage.removeItem(DOWNLOADED_MODEL_PATH_KEY); 
+          });
+      } else if (isMounted) {
+         console.log("No active model path found in LocalStorage.");
+      }
+    });
+    return () => { isMounted = false; };
+  }, []); // Run only once on mount
+
+
+  // Check downloaded models on mount 
+  useEffect(() => {
     async function checkExisting() {
         if (!fs.existsSync(MODEL_DIR)) {
             fs.mkdirSync(MODEL_DIR, { recursive: true });
@@ -69,7 +92,7 @@ export default function DownloadModelCommand() {
          }
     }
     checkExisting();
- }, []); // Run only once on mount
+  }, [setDownloadedModels]); 
 
 
   async function downloadModel(model: WhisperModel) {
@@ -171,6 +194,7 @@ export default function DownloadModelCommand() {
       console.log(`Download promise resolved. Saving path to LocalStorage: ${destinationPath}`);
       await LocalStorage.setItem(DOWNLOADED_MODEL_PATH_KEY, destinationPath);
       console.log(`Successfully saved path to LocalStorage.`);
+      setActiveModelPath(destinationPath);
 
       // Update downloaded status state
       setDownloadedModels(prev => ({ ...prev, [model.key]: true }));
@@ -208,21 +232,23 @@ export default function DownloadModelCommand() {
       const filePath = path.join(MODEL_DIR, model.filename);
        if (await confirmAlert({
            title: `Delete ${model.name}?`,
-           message: `Are you sure you want to delete the model file "${model.filename}"? This cannot be undone.`,
+           message: `Are you sure you want to delete the model file \"${model.filename}\"? This cannot be undone.`,
            primaryAction: { title: 'Delete', style: Alert.ActionStyle.Destructive },
        })) {
-           setIsLoading(model.key); 
+           setIsLoading(model.key);
            const toast = await showToast(Toast.Style.Animated, "Deleting model...");
            try {
                 console.log("Attempting to delete model:", filePath);
                 await fs.promises.unlink(filePath);
                 console.log("Model deleted successfully:", filePath);
 
-                // Clear specific model path from LocalStorage if was last selected
+                // Check if deleted model was active
                 const currentStoredPath = await LocalStorage.getItem<string>(DOWNLOADED_MODEL_PATH_KEY);
                 if (currentStoredPath === filePath) {
-                     console.log("Clearing downloaded model path from LocalStorage as it was deleted.");
+                     console.log("Clearing active model path from LocalStorage as it was deleted.");
                      await LocalStorage.removeItem(DOWNLOADED_MODEL_PATH_KEY);
+                     // Update state
+                     setActiveModelPath(null);
                 }
 
                 setDownloadedModels(prev => ({ ...prev, [model.key]: false }));
@@ -231,12 +257,11 @@ export default function DownloadModelCommand() {
                 toast.message = `${model.name} deleted successfully.`;
            } catch (error: any) {
                console.error(`Failed to delete model ${model.filename}:`, error);
-               // Don't assume deleted in state if unlink fails
                await showFailureToast(error instanceof Error ? error.message : String(error), {
                    title: `Failed to Delete ${model.name}`
                });
            } finally {
-                setIsLoading(false); // Reset loading state
+                setIsLoading(false);
            }
        } else {
           console.log("User cancelled model deletion.");
@@ -249,15 +274,29 @@ export default function DownloadModelCommand() {
       {models.map((model) => {
         const isModelLoading = isLoading === model.key;
         const isDownloaded = downloadedModels[model.key] || false;
+        //get model path and active status
+        const modelPath = path.join(MODEL_DIR, model.filename);
+        const isActive = isDownloaded && activeModelPath === modelPath;
+
+        //build accessories
+        const accessories = [];
+        if (isActive) {
+          // Add "Active" tag first if it's the active model
+          accessories.push({ tag: { value: "Active", color: Icon.Checkmark }, tooltip: "Currently active model" });
+        }
+        if (isDownloaded) {
+           // Add downloaded tag
+           accessories.push({ tag: { value: "Downloaded", color: "green" }, tooltip: "Model is downloaded" });
+        }
+        // Always add filename
+        accessories.push({ text: model.filename });
+
         return (
           <List.Item
             key={model.key}
             title={model.name}
             subtitle={model.size}
-            accessories={[
-                 isDownloaded ? { tag: { value: "Downloaded", color: "green" }, tooltip: "Model is downloaded" } : {},
-                 { text: model.filename }
-             ]}
+            accessories={accessories}
             actions={
               <ActionPanel>
                  {!isDownloaded && (
@@ -265,7 +304,7 @@ export default function DownloadModelCommand() {
                         title={`Download ${model.name}`}
                         onAction={() => downloadModel(model)}
                         icon={Icon.Download}
-                        disabled={isLoading !== false} // Disable if any download is in progress
+                        disabled={isLoading !== false}
                       />
                  )}
                  {isDownloaded && (
@@ -273,11 +312,13 @@ export default function DownloadModelCommand() {
                          title="Set as Active Model"
                          icon={Icon.Checkmark}
                          onAction={async () => {
-                             const modelPath = path.join(MODEL_DIR, model.filename);
+                             console.log(`Setting active model path: ${modelPath}`);
                              await LocalStorage.setItem(DOWNLOADED_MODEL_PATH_KEY, modelPath);
+                             setActiveModelPath(modelPath);
                              await showToast(Toast.Style.Success, "Active Model Set", `${model.name} is now the active model.`);
                          }}
-                         disabled={isLoading !== false}
+                         // Disable if already active or loading 
+                         disabled={isLoading !== false || isActive}
                      />
                  )}
                  {isDownloaded && (
@@ -285,15 +326,14 @@ export default function DownloadModelCommand() {
                           title={`Delete ${model.name}`}
                           icon={Icon.Trash}
                           style={Action.Style.Destructive}
-                          onAction={() => deleteModel(model)}
+                          onAction={() => deleteModel(model)} // Pass model object
                           disabled={isLoading !== false}
-                          shortcut={{ modifiers: ["ctrl"], key: "x" }}
+                          shortcut={{ modifiers: ["ctrl"], key: "x" }} 
                        />
                  )}
-                 {/* Action to reveal model in Finder */}
                  {isDownloaded && (
                     <Action.ShowInFinder
-                       path={path.join(MODEL_DIR, model.filename)}
+                       path={modelPath} // Use calculated modelPath
                        disabled={isLoading !== false}
                      />
                  )}

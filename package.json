@@ -42,6 +42,15 @@
       "placeholder": "/path/to/your/ggml-MODEL.bin"
     },
     {
+      "name": "soxExecutablePath",
+      "title": "SoX Executable Path",
+      "description": "Full path to the 'sox' command-line audio utility.",
+      "type": "textfield",
+      "required": true, 
+      "placeholder": "/opt/homebrew/bin/sox",
+      "default": "/opt/homebrew/bin/sox" 
+    },
+    {
       "description": "Action to perform automatically after transcription completes",
       "title": "Default Action After Transcription",
       "name": "defaultAction",
