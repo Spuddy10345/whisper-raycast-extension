@@ -291,6 +291,10 @@ export default function DownloadModelCommand() {
         // Always add filename
         accessories.push({ text: model.filename });
 
+        // Is ANY operation running?
+        const isAnyOperationLoading = isLoading !== false;
+
+
         return (
           <List.Item
             key={model.key}
@@ -299,15 +303,14 @@ export default function DownloadModelCommand() {
             accessories={accessories}
             actions={
               <ActionPanel>
-                 {!isDownloaded && (
+                 {!isDownloaded && !isAnyOperationLoading &&(
                      <Action
                         title={`Download ${model.name}`}
                         onAction={() => downloadModel(model)}
                         icon={Icon.Download}
-                        disabled={isLoading !== false}
                       />
-                 )}
-                 {isDownloaded && (
+                    )}
+                 {isDownloaded && !isAnyOperationLoading && (
                      <Action
                          title="Set as Active Model"
                          icon={Icon.Checkmark}
@@ -317,24 +320,20 @@ export default function DownloadModelCommand() {
                              setActiveModelPath(modelPath);
                              await showToast(Toast.Style.Success, "Active Model Set", `${model.name} is now the active model.`);
                          }}
-                         // Disable if already active or loading 
-                         disabled={isLoading !== false || isActive}
                      />
                  )}
-                 {isDownloaded && (
+                 {isDownloaded && !isAnyOperationLoading &&(
                       <Action
                           title={`Delete ${model.name}`}
                           icon={Icon.Trash}
                           style={Action.Style.Destructive}
                           onAction={() => deleteModel(model)} // Pass model object
-                          disabled={isLoading !== false}
                           shortcut={{ modifiers: ["ctrl"], key: "x" }} 
                        />
-                 )}
-                 {isDownloaded && (
+                    )}
+                 {isDownloaded &&  !isAnyOperationLoading && (
                     <Action.ShowInFinder
                        path={modelPath} // Use calculated modelPath
-                       disabled={isLoading !== false}
                      />
                  )}
               </ActionPanel>
