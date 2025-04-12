@@ -2,16 +2,26 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+<p align="center">
+  <img src="assets/extension-icon.png" alt="Alt text describing the image" width="200">
+</p>
+
+
+<p align="center">
+  <img src="assets/download-models.png" alt="Alt text describing the image" width="600">
+</p>
+<p align="center">
+  <img src="assets/recording.png" alt="Alt text describing the image" width="600">
+</p>
+<p align="center">
+  <img src="assets/transcribed.png" alt="Alt text describing the image" width="600">
+</p>
+
 Effortlessly convert your speech to text directly within Raycast using the power of [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp). This extension provides a simple interface to record audio and transcribe it locally. privately on your machine.
-
-
-    ![Downloading Models](assets/whisper-dictation%202025-04-12%20at%2016.02.17.png)
-    ![Recording Audio](assets/whisper-dictation%202025-04-12%20at%2016.02.32.png)
-    ![Transcribing Text](assets/whisper-dictation%202025-04-12%20at%2016.03.41.png)
-
 ## ✨ Features
 
 *   **Local Transcription:** Uses `whisper.cpp` running locally on your machine through Raycast.
+    **Download Models** Download a variety of models from right within the extension.
 *   **Simple Interface:** Start recording, press Enter to stop, copy or directly paste into your active window.
 *   **Configurable Output:** Choose to choose, or automatically paste or copy to clipboard. 
 
@@ -38,7 +48,7 @@ Before installing the extension, you need the following installed and configured
     * The easiest way is to use homebrew: `brew install whisper-cpp`
     * If installed another way make sure to update the path to your whisper-cli executable iin the extension's preferences.
 3.  **Whisper Model File:** 
-    * Download a model using the `Download Whisper Model`    extesnion command. This will configure the model's path automatically. 
+    * Download a model using the `Download Whisper Model` extesnion command. This will configure the model's path automatically. 
     * Alternatively, download a model yourself (`ggml-{model}.bin`) and point the extension to it's path in preferences.
 4.  **`sox`:** This extension uses the SoX (Sound eXchange) utility for audio recording.
     *   The easiest way to install it on macOS is with [Homebrew](https://brew.sh/): `brew install sox`
