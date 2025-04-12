@@ -15,8 +15,7 @@ import {
   LaunchType,
   showHUD,
   openExtensionPreferences,
-  confirmAlert,
-  Alert,
+  PopToRootType,
 } from "@raycast/api";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { spawn, exec } from "child_process";
@@ -236,11 +235,6 @@ export default function Command() {
 
                   process.on('error', (err) => {
                      console.error(`sox process PID ${process?.pid} error event:`, err);
-                     // Avoid setting state if unmounted or error already occurred
-                     if (isMounted && state !== 'error') {
-                         setErrorMessage(`Recording process failed. Error: ${err.message}`);
-                         setState("error");
-                     }
                      soxProcessRef.current = null; // Clear ref on error
                   });
 
@@ -463,11 +457,11 @@ export default function Command() {
     if (DEFAULT_ACTION === "paste") {
       await Clipboard.paste(text);
       await showHUD("Pasted transcribed text"); 
-      closeMainWindow({ clearRootSearch: true });
+      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     } else if (DEFAULT_ACTION === "copy") {
       await Clipboard.copy(text);
       await showHUD("Copied to clipboard");
-      closeMainWindow({ clearRootSearch: true });
+      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     } else {
       // Action is "none", stay in "done" state
       showToast({ style: Toast.Style.Success, title: "Transcription complete" });
