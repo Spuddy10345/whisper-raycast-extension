@@ -22,7 +22,7 @@ import { spawn, exec } from "child_process";
 import type { ChildProcessWithoutNullStreams } from "child_process";
 import path from 'path';
 import fs from 'fs';
-import { showFailureToast, useCachedState } from "@raycast/utils"; 
+import { showFailureToast } from "@raycast/utils"; 
 
 interface Preferences {
   whisperExecutable: string;
@@ -115,7 +115,7 @@ export default function Command() {
       // Validate whisper-cli path
       if (!whisperExecPath || !fs.existsSync(whisperExecPath)) {
         console.error(`Whisper executable check failed: '${whisperExecPath}'`);
-        const errorMsg = `Whisper executable not found at '${whisperExecPath || "not set"}'. Please install 'whisper.cpp' (e.g., 'brew install whisper-cpp') or set the correct path in preferences.`;
+        const errorMsg = `Whisper executable not found at '${whisperExecPath || "not set"}'. \n\nEnsure whisper.cpp is installed and the path in preferences is correct. \nCommon paths:\n- Homebrew (Apple Silicon): /opt/homebrew/bin/whisper-cli\n- Homebrew (Intel): /usr/local/bin/whisper-cli`;
         setErrorMessage(errorMsg);
         if (isMounted) setState("error");
         await showFailureToast(errorMsg, {
@@ -173,7 +173,7 @@ export default function Command() {
       // Config Successful
       console.log("Configuration successful:", { whisperExecPath, finalModelPath, soxPath });
       if (isMounted) {
-          // --- SET FULL CONFIG ---
+          // Set full config
           setConfig({ execPath: whisperExecPath, modelPath: finalModelPath, soxPath: soxPath });
           setErrorMessage("");
           setState("idle");
@@ -182,15 +182,12 @@ export default function Command() {
   
     checkConfiguration();
 
-
-    // Cleanup function for effect
-  
     // Cleanup function for effect
     return () => {
         isMounted = false;
         console.log("checkConfiguration effect cleanup");
     };
-  // --- Rerun if ANY relevant preference changes ---
+    // Rerun on preference change
   }, [preferences.whisperExecutable, preferences.modelPath, preferences.soxExecutablePath]);
   
 
@@ -387,7 +384,6 @@ export default function Command() {
 
     // Execute whisper-cli
     exec(
-      // Use quotes around paths to handle spaces
       `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps`, 
       async (error, stdout, stderr) => {
         // Always clean up audio file after exec finishes

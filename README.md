@@ -4,8 +4,10 @@
 
 Effortlessly convert your speech to text directly within Raycast using the power of [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp). This extension provides a simple interface to record audio and transcribe it locally. privately on your machine.
 
-<!-- TODO: Add a GIF demo here! Showing the recording process and the result would be very helpful. -->
-<!-- Example: <p align="center"><img src="link/to/your/demo.gif" width="600"></p> -->
+
+    ![Downloading Models](assets/whisper-dictation%202025-04-12%20at%2016.02.17.png)
+    ![Recording Audio](assets/whisper-dictation%202025-04-12%20at%2016.02.32.png)
+    ![Transcribing Text](assets/whisper-dictation%202025-04-12%20at%2016.03.41.png)
 
 ## ✨ Features
 
@@ -32,14 +34,15 @@ Effortlessly convert your speech to text directly within Raycast using the power
 Before installing the extension, you need the following installed and configured on your system:
 
 1.  **Raycast:** You need the Raycast app installed.
-2.  **`whisper.cpp`:** You must compile the `whisper.cpp` project yourself.
-    *   Clone the repository: `git clone https://github.com/ggerganov/whisper.cpp.git`
-    *   Follow their instructions to build the project (e.g., using `make`). You specifically need the `main` executable (or potentially `whisper-cli` depending on the build options/version you use). Note the *full path* to this executable.
-3.  **Whisper Model File:** Download a `whisper.cpp`-compatible model file (usually ending in `.bin`).
-    *   Models can be found linked in the `whisper.cpp` repository documentation. Common sizes include `tiny`, `base`, `small`, `medium`, `large`. Smaller models are faster but less accurate. Choose one (e.g., `ggml-base.en.bin` for English base model) and note its *full path*.
+2.  **`whisper.cpp`:** You must install whisper-cpp. 
+    * The easiest way is to use homebrew: `brew install whisper-cpp`
+    * If installed another way make sure to update the path to your whisper-cli executable iin the extension's preferences.
+3.  **Whisper Model File:** 
+    * Download a model using the `Download Whisper Model`    extesnion command. This will configure the model's path automatically. 
+    * Alternatively, download a model yourself (`ggml-{model}.bin`) and point the extension to it's path in preferences.
 4.  **`sox`:** This extension uses the SoX (Sound eXchange) utility for audio recording.
     *   The easiest way to install it on macOS is with [Homebrew](https://brew.sh/): `brew install sox`
-    *   The extension currently expects `sox` to be at `/opt/homebrew/bin/sox`. If yours is installed somewhere else, change the path *within the extension's code* (`dictate.tsx`) or use a sym-link.
+    *The extension currently default for `sox` to be at `/opt/homebrew/bin/sox`. If yours is installed somewhere else, point the extension to it's executable in preferences.
 
 ## 🚀 Installation
 
@@ -71,14 +74,18 @@ Since this extension isn't on the Raycast Store (yet!), you'll install it from t
 
 ## ⚙️ Configuration
 
-After installing, you have to configure the extension preferences in Raycast:
+After installing, you have to configure the extension preferences in Raycast, if you installed both SoX and whisper-cpp using homebrew, and download a model using the extension this should all be pre-configured for you, the extension will also confirm both SoX and whisper-cli path on first launch:
 
 1.  Open Raycast Preferences (`⌘ + ,`).
 2.  Navigate to `Extensions`.
 3.  Find "Whisper Dictation" in the list.
 4.  Set the following required preferences:
     *   **Whisper Executable Path:** Enter the *full, absolute path* to your compiled `whisper.cpp` executable (e.g., `/path/to/your/whisper.cpp/build/bin/whisper-cli`).
+    * Or if you installed via homebrew on an intel mac: `/usr/local/bin/whisper-cpp`
     *   **Whisper Model Path:** Enter the *full, absolute path* to your downloaded `.bin` model file (e.g., `/path/to/your/whisper.cpp/models/ggml-base.en.bin`).
+    * **SoX executable path** Enter the *full, absolute path* to your sox executable
+    * For example if you installed SoX using homebrew on an Intel mac you would use:
+    * `/usr/local/bin/sox`
     *   **Default Action After Transcription (Optional):** Choose what happens automatically when transcription finishes:
         *   `Paste Text`: Pastes the text into the active application.
         *   `Copy to Clipboard`: Copies the text to the clipboard.
@@ -87,18 +94,20 @@ After installing, you have to configure the extension preferences in Raycast:
 ## 💡 Usage
 
 1.  **Launch:** Open Raycast and search for the "Dictate Text" command. Press Enter.
-2.  **Record:** The extension window will appear, showing a "RECORDING AUDIO..." message and a waveform animation. Start speaking clearly.
+2.  **Download a Model** Choose the `Download Whisper Model` command and choose the model you would like to download
+* Larger models are more accurate, but also slower and require more ram/processing power
+3.  **Record:** Open the `Dictate Text` command. The extension window will appear, showing a "RECORDING AUDIO..." message and a waveform animation. Start speaking clearly.
     *   Press `Enter` when you are finished speaking.
     *   Press `⌘ + .` or click "Cancel Recording" to abort.
-3.  **Transcribe:** The view will change to show a loading indicator while `whisper.cpp` processes the audio. This may take a few seconds depending on the audio length and model size.
-4.  **Result:**
+4.  **Transcribe:** The view will change to show a loading indicator while `whisper.cpp` processes the audio. This may take a few seconds depending on the audio length and model size.
+5.  **Result:**
     *   If transcription is successful, the text area will populate with the dictated text.
+    * If there are any mistakes you can modify the text directly within the text box (as long as auto copy/paste isn't active)
     *   Based on your "Default Action" preference:
         *   It might automatically paste or copy, and close Raycast.
         *   Or, it will display the text with actions:
             *   `Paste Text`: Pastes the content.
             *   `Copy Text` (`⌘ + Enter`): Copies the content.
-            *   `Start New Dictation`: Resets the state (you'll need to close and reopen the command currently).
             *   `Close` (`Esc`): Closes the Raycast window.
     *   If an error occurs during recording or transcription, an error message will be displayed.
 
