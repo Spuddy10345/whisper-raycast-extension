@@ -13,6 +13,8 @@ import {
     confirmAlert,
     Alert,
     getPreferenceValues,
+    closeMainWindow,
+    PopToRootType,
   } from "@raycast/api";
   import { useCallback, useState, useEffect } from "react";
   import { useCachedState } from "@raycast/utils";
@@ -214,7 +216,7 @@ import {
           <List.Item
             icon={
               preferences.enableAIRefinement
-                ? { source: Icon.Checkmark, tintColor: Color.Green }
+                ? { source: Icon.CheckCircle, tintColor: Color.Green }
                 : { source: Icon.XMarkCircle, tintColor: Color.Red }
             }
             title={preferences.enableAIRefinement ? "AI Refinement Enabled" : "AI Refinement Disabled"}
@@ -232,7 +234,10 @@ import {
                 <Action
                   title="Open Extension Preferences"
                   icon={Icon.Gear}
-                  onAction={openExtensionPreferences}
+                  onAction={() => {
+                    closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+                    openExtensionPreferences();
+                  }}
                 />
               </ActionPanel>
             }
@@ -281,7 +286,7 @@ import {
             />
           ))}
           <List.Item
-            icon={{ source: Icon.Plus, tintColor: Color.Blue }}
+            icon={{ source: Icon.Plus, tintColor: Color.SecondaryText }}
             title="Add New Prompt"
             actions={
               <ActionPanel>
