@@ -31,8 +31,10 @@ interface Preferences {
   modelPath: string;
   soxExecutablePath: string;
   defaultAction: "paste" | "copy" | "none";
-  enableAIRefinement: boolean;
+  aiRefinementMethod: "disabled" | "raycast" | "ollama";
   aiModel: string;
+  ollamaEndpoint: string;
+  ollamaModel: string;
 }
 
 interface TranscriptionHistoryItem {
@@ -70,7 +72,8 @@ export default function Command() {
   const preferences = getPreferenceValues<Preferences>();
   const DEFAULT_ACTION = preferences.defaultAction || "none";
   
-  async function refineWithAI(text: string, modelId: string): Promise<string> {
+  // Function to refine text using Raycast AI
+  async function refineWithRaycastAI(text: string, modelId: string): Promise<string> {
     try {
       // Get active prompt
       const activePromptId = await LocalStorage.getItem<string>(ACTIVE_PROMPT_ID_KEY) || "default";
@@ -102,12 +105,142 @@ export default function Command() {
       
       return refined.trim();
     } catch (error) {
-      console.error("AI refinement failed:", error);
+      console.error("Raycast AI refinement failed:", error);
       await showToast({
         style: Toast.Style.Failure,
         title: "AI Refinement Failed",
         message: error instanceof Error ? error.message : "Unknown error",
       });
+      return text; // Return original text on error
+    }
+  }
+
+  async function refineWithOllama(text: string, endpoint: string, model: string): Promise<string> {
+    try {
+      // Get active prompt
+      const activePromptId = await LocalStorage.getItem<string>(ACTIVE_PROMPT_ID_KEY) || "default";
+      const promptsJson = await LocalStorage.getItem<string>(AI_PROMPTS_KEY);
+      
+      let prompts = [];
+      if (promptsJson) {
+        prompts = JSON.parse(promptsJson);
+      } else {
+        // Default prompt if none configured
+        prompts = [
+          {
+            id: "default",
+            name: "Email Format",
+            prompt: "Reformat this dictation as a professional email. Keep all facts and information from the original text. Add appropriate greeting and signature if needed.",
+            isDefault: true,
+          }
+        ];
+      }
+      
+      // Find the active prompt
+      const activePrompt = prompts.find((p: any) => p.id === activePromptId) || prompts[0];
+      
+      // Remove slash frome user endpoint if present
+      const baseEndpoint = endpoint.endsWith("/") ? endpoint.slice(0, -1) : endpoint;
+      const ollamaUrl = `${baseEndpoint}/v1/chat/completions`; // Use the full completions endpoint
+      
+      console.log(`Calling Ollama endpoint: ${ollamaUrl} with model: ${model}`);
+      
+      // Fetch to call Ollama API
+      const response = await fetch(ollamaUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            { "role": "system", "content": activePrompt.prompt },
+            { "role": "user", "content": text }
+          ],
+          stream: false 
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Ollama API error (${response.status}): ${errorText}`);
+        throw new Error(`Ollama API error (${response.status}): ${errorText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Extract content from response
+      if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
+        return data.choices[0].message.content.trim();
+      } else {
+        console.error("Unexpected Ollama response structure:", data);
+        throw new Error("Failed to parse response from Ollama.");
+      }
+      
+    } catch (error) {
+      console.error("Ollama refinement failed:", error);
+      
+      let title = "Ollama Refinement Failed";
+      let message = error instanceof Error ? error.message : "Unknown error";
+
+      // Checks for connection errors
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+         title = "Ollama Connection Failed";
+         message = `Could not connect to the Ollama server at ${endpoint}. Please ensure it's running and accessible.`;
+      }
+
+      await showToast({
+        style: Toast.Style.Failure,
+        title: title,
+        message: message,
+      });
+      return text; // Return original text on error
+    }
+  }
+  
+  // Handles text refinement based on selected method
+  async function refineText(text: string): Promise<string> {
+    const preferences = getPreferenceValues<Preferences>();
+    
+    if (preferences.aiRefinementMethod === "disabled") {
+      return text;
+    }
+    
+    const toast = await showToast({
+      style: Toast.Style.Animated,
+      title: "Refining with AI...",
+    });
+    
+    try {
+      let refinedText: string;
+      
+      if (preferences.aiRefinementMethod === "raycast") {
+        // Check for Raycast AI access
+        if (!environment.canAccess("AI")) {
+          toast.style = Toast.Style.Failure;
+          toast.title = "Raycast AI Not Available";
+          toast.message = "Raycast Pro subscription required for AI features.";
+          return text;
+        }
+        
+        refinedText = await refineWithRaycastAI(text, preferences.aiModel);
+      } else {
+        // Use Ollama
+        refinedText = await refineWithOllama(
+          text, 
+          preferences.ollamaEndpoint, 
+          preferences.ollamaModel
+        );
+      }
+      
+      toast.style = Toast.Style.Success;
+      toast.title = "AI Refinement Complete";
+      
+      return refinedText;
+    } catch (error) {
+      toast.style = Toast.Style.Failure;
+      toast.title = "AI Refinement Failed";
+      toast.message = error instanceof Error ? error.message : "Unknown error";
       return text; // Return original text on error
     }
   }
@@ -517,34 +650,23 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
   const handleTranscriptionComplete = useCallback(async (text: string) => {
     let finalText = text;
     let refinementError = null; 
-
+  
     // Apply AI refinement if enabled and text is not empty
-    if (preferences.enableAIRefinement && text && text !== "[BLANK_AUDIO]" && environment.canAccess("AI")) {
-      const toast = await showToast({
-        style: Toast.Style.Animated,
-        title: "Refining with AI...",
-      });
-
+    if (preferences.aiRefinementMethod !== "disabled" && text && text !== "[BLANK_AUDIO]") {
       try {
-        finalText = await refineWithAI(text, preferences.aiModel);
-        toast.style = Toast.Style.Success;
-        toast.title = "AI Refinement Complete";
+        finalText = await refineText(text);
       } catch (error) {
         console.error("AI refinement error:", error);
-        refinementError = error; 
-        // If AI fails, use original text 
-        toast.style = Toast.Style.Failure;
-        toast.title = "AI Refinement Failed";
-        toast.message = error instanceof Error ? error.message : "Unknown error";
+        refinementError = error;
       }
     } else {
       console.log("AI refinement skipped.");
     }
-
+  
     setTranscribedText(finalText);
     await saveTranscriptionToHistory(finalText); 
     setState("done");
-
+  
     if (DEFAULT_ACTION === "paste") {
       await Clipboard.paste(finalText);
       await showHUD("Pasted transcribed text");
@@ -557,16 +679,15 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
       await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     } else {
       // Action is "none", stay in "done" state
-      if (!preferences.enableAIRefinement || !refinementError) {
+      if (preferences.aiRefinementMethod === "disabled" || !refinementError) {
          await showToast({ style: Toast.Style.Success, title: "Transcription complete" });
       }
     }
-
+  
     if (DEFAULT_ACTION === "none") {
         cleanupSoxProcess();
     }
-
-  }, [DEFAULT_ACTION, cleanupSoxProcess, preferences.enableAIRefinement, preferences.aiModel, refineWithAI]);
+  }, [DEFAULT_ACTION, cleanupSoxProcess, preferences.aiRefinementMethod, saveTranscriptionToHistory]);
 
   const generateWaveformMarkdown = useCallback(() => {
     const waveformHeight = 18;
