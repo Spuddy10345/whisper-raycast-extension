@@ -41,6 +41,7 @@ import {
             }
           } else {
             setHistory([]);
+            console.log("History Command: No history found in LocalStorage"); 
           }
         } catch (error) {
           console.error("Error loading history:", error);
@@ -133,11 +134,13 @@ import {
                     <ActionPanel.Section title="Transcription">
                       <Action.CopyToClipboard
                         title="Copy Text"
+                        icon={Icon.Clipboard}
                         content={item.text}
                         shortcut={{ modifiers: ["cmd"], key: "enter" }}
                       />
                       <Action.Paste
                         title="Paste Text"
+                        icon={Icon.Clipboard}
                         content={item.text}
                         shortcut={{ modifiers: ["cmd"], key: "enter" }}
                       />
@@ -159,6 +162,7 @@ import {
                       />
                     </ActionPanel.Section>
                   </ActionPanel>
+                  
                 }
               />
             );

@@ -16,6 +16,7 @@ import {
   showHUD,
   openExtensionPreferences,
   PopToRootType,
+  AI,
 } from "@raycast/api";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { spawn, exec } from "child_process";
@@ -30,6 +31,8 @@ interface Preferences {
   modelPath: string;
   soxExecutablePath: string;
   defaultAction: "paste" | "copy" | "none";
+  enableAIRefinement: boolean;
+  aiModel: string;
 }
 
 interface TranscriptionHistoryItem {
@@ -43,6 +46,10 @@ interface TranscriptionHistoryItem {
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav"); 
 const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
 const HISTORY_STORAGE_KEY = "dictationHistory";
+const prompt = "Write the following in email format, the greeting line should be Hey < persons name>, and separate it from the body with newlines. Always sign off with Best, Fin. Do not include a subject line or add additional language. If a calendar link is included do not modify it, or surround it with angle brackets"; // Default prompt for whisper
+const AI_PROMPTS_KEY = "aiPrompts";
+const ACTIVE_PROMPT_ID_KEY = "activePromptId"; 
+
 
 // Define states
 type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
@@ -62,6 +69,48 @@ export default function Command() {
 
   const preferences = getPreferenceValues<Preferences>();
   const DEFAULT_ACTION = preferences.defaultAction || "none";
+  
+  async function refineWithAI(text: string, modelId: string): Promise<string> {
+    try {
+      // Get active prompt
+      const activePromptId = await LocalStorage.getItem<string>(ACTIVE_PROMPT_ID_KEY) || "default";
+      const promptsJson = await LocalStorage.getItem<string>(AI_PROMPTS_KEY);
+      
+      let prompts = [];
+      if (promptsJson) {
+        prompts = JSON.parse(promptsJson);
+      } else {
+        // Default prompt if none configured
+        prompts = [
+          {
+            id: "default",
+            name: "Email Format",
+            prompt: "Reformat this dictation as a professional email. Keep all facts and information from the original text. Add appropriate greeting and signature if needed.",
+            isDefault: true,
+          }
+        ];
+      }
+      
+      // Find the active prompt
+      const activePrompt = prompts.find((p: any) => p.id === activePromptId) || prompts[0];
+      
+      // Use AI to refine text
+      const refined = await AI.ask(`${activePrompt.prompt}\n\nText to refine: "${text}"`, {
+        model: AI.Model[modelId as keyof typeof AI.Model] || AI.Model["OpenAI_GPT4o-mini"],
+        creativity: "medium",
+      });
+      
+      return refined.trim();
+    } catch (error) {
+      console.error("AI refinement failed:", error);
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "AI Refinement Failed",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+      return text; // Return original text on error
+    }
+  }
 
   // Cleanup function for Sox process and audio file
   const cleanupSoxProcess = useCallback(() => {
@@ -318,7 +367,7 @@ export default function Command() {
 
 const saveTranscriptionToHistory = useCallback(async (text: string) => {
     // Don't save empty transcription
-    if (!text) return; 
+    if (!text || text === "[BLANK_AUDIO]") return; 
 
     try {
       const newItem: TranscriptionHistoryItem = {
@@ -411,7 +460,7 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
 
 
     //delay to ensure audio file written
-    await new Promise(resolve => setTimeout(resolve, 400)); 
+    await new Promise(resolve => setTimeout(resolve, 300)); 
 
     console.log(`Checking for audio file: ${AUDIO_FILE_PATH}`);
 
@@ -440,7 +489,7 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
 
     // Execute whisper-cli
     exec(
-      `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps`, 
+      `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps --prompt "${prompt}"`, 
       async (error, stdout, stderr) => {
         // Always clean up audio file after exec finishes
         cleanupSoxProcess();
@@ -456,9 +505,9 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
         } else {
           console.log("Transcription successful.");
           const trimmedText = stdout.trim();
+          console.log("Transcribed text:", trimmedText);
           setTranscribedText(trimmedText);
           await saveTranscriptionToHistory(trimmedText);
-          setState("done");
 
           await handleTranscriptionComplete(trimmedText);
         }
@@ -466,23 +515,58 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
     );
   }, [state, config, cleanupSoxProcess, saveTranscriptionToHistory]);
 
-const handleTranscriptionComplete = useCallback(async (text: string) => {
-    cleanupSoxProcess(); // Ensure cleanup before closeMainWindow
+  const handleTranscriptionComplete = useCallback(async (text: string) => {
+    let finalText = text;
+    let refinementError = null; 
 
-    // Prefs to copy/paste immediately
+    // Apply AI refinement if enabled and text is not empty
+    if (preferences.enableAIRefinement && text && text !== "[BLANK_AUDIO]" && environment.canAccess("AI")) {
+      const toast = await showToast({
+        style: Toast.Style.Animated,
+        title: "Refining with AI...",
+      });
+
+      try {
+        finalText = await refineWithAI(text, preferences.aiModel);
+        toast.style = Toast.Style.Success;
+        toast.title = "AI Refinement Complete";
+      } catch (error) {
+        console.error("AI refinement error:", error);
+        refinementError = error; 
+        // If AI fails, use original text 
+        toast.style = Toast.Style.Failure;
+        toast.title = "AI Refinement Failed";
+        toast.message = error instanceof Error ? error.message : "Unknown error";
+      }
+    } else {
+      console.log("AI refinement skipped.");
+    }
+
+    setTranscribedText(finalText);
+    setState("done");
+
     if (DEFAULT_ACTION === "paste") {
-      await Clipboard.paste(text);
-      await showHUD("Pasted transcribed text"); 
+      await Clipboard.paste(finalText);
+      await showHUD("Pasted transcribed text");
+      cleanupSoxProcess(); // Cleanup before closing
       await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     } else if (DEFAULT_ACTION === "copy") {
-      await Clipboard.copy(text);
+      await Clipboard.copy(finalText);
       await showHUD("Copied to clipboard");
+      cleanupSoxProcess(); // Cleanup before closing
       await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     } else {
       // Action is "none", stay in "done" state
-      showToast({ style: Toast.Style.Success, title: "Transcription complete" });
+      if (!preferences.enableAIRefinement || !refinementError) {
+         await showToast({ style: Toast.Style.Success, title: "Transcription complete" });
+      }
     }
-  }, [DEFAULT_ACTION, cleanupSoxProcess]);
+
+    if (DEFAULT_ACTION === "none") {
+        cleanupSoxProcess();
+    }
+
+  }, [DEFAULT_ACTION, cleanupSoxProcess, preferences.enableAIRefinement, preferences.aiModel, refineWithAI]);
 
   const generateWaveformMarkdown = useCallback(() => {
     const waveformHeight = 18;
@@ -542,13 +626,13 @@ const handleTranscriptionComplete = useCallback(async (text: string) => {
             <Action.Paste
               title={DEFAULT_ACTION === "paste" ? "Paste Text (Default)" : "Paste Text"}
               content={transcribedText}
-              onPaste={() => closeMainWindow({ clearRootSearch: true })} // Close after paste
+              onPaste={() => closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })} // Close after paste
             />
             <Action.CopyToClipboard
               title={DEFAULT_ACTION === "copy" ? "Copy Text (Default)" : "Copy Text"}
               content={transcribedText}
               shortcut={{ modifiers: ["cmd"], key: "enter" }}
-              onCopy={() => closeMainWindow({ clearRootSearch: true })} // Close after copy
+              onCopy={() => closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })} // Close after copy
             />
             <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
           </ActionPanel>
