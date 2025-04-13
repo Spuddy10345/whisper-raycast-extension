@@ -22,7 +22,8 @@ Effortlessly convert your speech to text directly within Raycast using the power
 
 *   **Local Transcription:** Uses `whisper.cpp` running locally on your machine through Raycast.
     **Download Models** Download a variety of models from right within the extension.
-*   **Simple Interface:** Start recording, press Enter to stop, copy or directly paste into your active window.
+    **Dictation History** Saves all transcriptions locally with timestamps which can be browsed, copied and pasted using the Dictation History command.
+*   **Simple Interface:** Start recording, press Enter to stop, copy or directly paste into your    active window.
 *   **Configurable Output:** Choose to choose, or automatically paste or copy to clipboard. 
 
 ## 📚 Table of Contents
@@ -34,6 +35,7 @@ Effortlessly convert your speech to text directly within Raycast using the power
     *   [2. Install the Extension](#2-install-the-extension)
 *   [Configuration](#️-configuration)
 *   [Usage](#-usage)
+*   [Models](#-models)
 *   [Troubleshooting](#-troubleshooting)
 *   [Contributing](#-contributing)
 *   [License](#-license)
@@ -104,8 +106,11 @@ After installing, you have to configure the extension preferences in Raycast, if
 ## 💡 Usage
 
 1.  **Launch:** Open Raycast and search for the "Dictate Text" command. Press Enter.
-2.  **Download a Model** Choose the `Download Whisper Model` command and choose the model you would like to download
-* Larger models are more accurate, but also slower and require more ram/processing power
+2.  **Download a Model** 
+    * Choose the `Download Whisper Model` command and choose the model you would like to download with `Enter`.
+    * You can choose your active model with `Enter` if you have multiple models downloaded.
+    * Larger models are more accurate, but also slower and require more ram/processing power
+    * Delete models you no longer need using `Ctrl+X`
 3.  **Record:** Open the `Dictate Text` command. The extension window will appear, showing a "RECORDING AUDIO..." message and a waveform animation. Start speaking clearly.
     *   Press `Enter` when you are finished speaking.
     *   Press `⌘ + .` or click "Cancel Recording" to abort.
@@ -118,8 +123,24 @@ After installing, you have to configure the extension preferences in Raycast, if
         *   Or, it will display the text with actions:
             *   `Paste Text`: Pastes the content.
             *   `Copy Text` (`⌘ + Enter`): Copies the content.
+            *   Or automate the process in `Preferences`
             *   `Close` (`Esc`): Closes the Raycast window.
     *   If an error occurs during recording or transcription, an error message will be displayed.
+6. **History:** Check back in your `Dictation History` anytime you need a past transcription. It currently stores up to 100. 
+    * Delete transcriptions as needed with `Ctrl+X` 
+    * Or delete all with `Ctrl+Shift+X` for a fresh start.
+
+## 🤖 Models
+
+The extension downloader currently supports the following whisper models, however you can download any model you might need from [ggervanov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp/tree/main) and configure it's path in the extension's preferences:
+
+* **Base, English Language** (`base.en`, 148 MB) - Small and speedy, same size as `base` but more accurate if just transcribing in english
+* **Small, English Language** (`small.en`, 488MB) - Optimised for english, slightly larger and more accurate than base while not consuming too many resources
+* **Medium, English Language** (`medium.en`, 1.53 GB - Slightly larger again, optimised for english, transcriptions will be slower than above and consume more resources, but will be more accurate
+* **Base, Multilingual** (`base`, 148 MB) - Small, speedy and multilingual
+* **Small, Multilingual** (`small`, 488 MB) - Still pretty speedy and multilingual
+* **Medium, Multilingual** (`medium`, 1.53 GB) - Slower, more accurate and multilingual.
+* **Large, Multilingual** (`large-v3`, 3.1 GB) - The largest, slowest, most accurate model available. Use if you have a powerful computer or a lot o time on your hands, especially for longer transcriptions.
 
 ## 🐛 Troubleshooting
 
@@ -158,6 +179,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 *   [Georgi Gerganov](https://github.com/ggerganov) for the amazing [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp) project.
 *   The [Raycast](https://raycast.com/) team for the fantastic platform and API.
-*   [SoX - Sound eXchange](http://sox.sourceforge.net/) developers.
+*   [SoX - Sound eXchange](https://github.com/chirlu/sox) developers.
 
 ---

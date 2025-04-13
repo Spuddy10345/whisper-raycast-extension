@@ -23,6 +23,7 @@ import type { ChildProcessWithoutNullStreams } from "child_process";
 import path from 'path';
 import fs from 'fs';
 import { showFailureToast } from "@raycast/utils"; 
+import crypto from "crypto";
 
 interface Preferences {
   whisperExecutable: string;
@@ -31,10 +32,17 @@ interface Preferences {
   defaultAction: "paste" | "copy" | "none";
 }
 
+interface TranscriptionHistoryItem {
+  id: string;      
+  timestamp: number;
+  text: string;
+}
+
+
 // Paths
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav"); 
 const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
-const preferences = getPreferenceValues<Preferences>();
+const HISTORY_STORAGE_KEY = "dictationHistory";
 
 // Define states
 type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
@@ -227,7 +235,7 @@ export default function Command() {
                      console.error("sox spawn synchronous error:", err);
                      setErrorMessage(`Failed to start recording command. Error: ${err.message}`);
                      if (isMounted) setState("error");
-                     return; // Return from inner .then callback
+                     return; 
                   }
 
                   process.on('error', (err) => {
@@ -308,6 +316,56 @@ export default function Command() {
     };
   }, [state]);
 
+const saveTranscriptionToHistory = useCallback(async (text: string) => {
+    // Don't save empty transcription
+    if (!text) return; 
+
+    try {
+      const newItem: TranscriptionHistoryItem = {
+        id: crypto.randomUUID(), 
+        timestamp: Date.now(),
+        text: text,
+      };
+
+      const existingHistoryString = await LocalStorage.getItem<string>(HISTORY_STORAGE_KEY);
+      let history: TranscriptionHistoryItem[] = [];
+
+      //
+      if (existingHistoryString) {
+        try {
+          history = JSON.parse(existingHistoryString);
+          if (!Array.isArray(history)) { 
+             console.warn("Invalid history data found in LocalStorage, resetting.");
+             history = [];
+          }
+        } catch (parseError) {
+          console.error("Failed to parse history from LocalStorage:", parseError);
+          await showToast({ style: Toast.Style.Failure, title: "Warning", message: "Could not read previous dictation history. Clearing history." });
+          history = []; // Reset history if parse fails
+        }
+      }
+
+      // Add new item to beginning
+      history.unshift(newItem);
+
+      // Limit history size
+      const MAX_HISTORY_ITEMS = 100;
+      if (history.length > MAX_HISTORY_ITEMS) {
+         history = history.slice(0, MAX_HISTORY_ITEMS);
+      }
+
+      await LocalStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+      console.log("Saved transcription to history.");
+
+    } catch (error) {
+      console.error("Failed to save transcription to history:", error);
+       await showToast({ style: Toast.Style.Failure, title: "Error", message: "Failed to save transcription to history." });
+    }
+  }, []);
+
+
+  
+
   const stopRecordingAndTranscribe = useCallback(async () => {
     // Use the current state value directly from the hook
     console.log(`stopRecordingAndTranscribe called. Current state: ${state}`);
@@ -346,7 +404,6 @@ export default function Command() {
            }
         } catch (e) {
           console.warn(`Error stopping sox process PID ${processToStop.pid}:`, e);
-          // Transcribe even if stopping fails
         }
     } else {
          console.warn("stopRecordingAndTranscribe: No active sox process reference found to stop.");
@@ -362,7 +419,7 @@ export default function Command() {
       const stats = await fs.promises.stat(AUDIO_FILE_PATH);
       console.log(`Audio file stats: ${JSON.stringify(stats)}`);
       
-      // Check if file exists and has expected size (e.g., > 44 bytes for WAV header)
+      // Check if file exists and has expected size 
       if (stats.size <= 44) {
         throw new Error(`Audio file is empty or too small (size: ${stats.size} bytes). Recording might have failed or captured no sound.`);
       }
@@ -370,7 +427,6 @@ export default function Command() {
       console.log(`Audio file exists and has size ${stats.size}. Proceeding with transcription.`);
     } catch (fileError: any) {
       console.error(`Audio file check failed: ${AUDIO_FILE_PATH}`, fileError);
-      // specific error message based on the error code
       const errorMsg = fileError.code === 'ENOENT'
         ? `Transcription failed: Audio file not found. Recording might have failed.`
         : `Transcription failed: Cannot access audio file. ${fileError.message}`;
@@ -401,14 +457,32 @@ export default function Command() {
           console.log("Transcription successful.");
           const trimmedText = stdout.trim();
           setTranscribedText(trimmedText);
+          await saveTranscriptionToHistory(trimmedText);
           setState("done");
 
           await handleTranscriptionComplete(trimmedText);
         }
       }
     );
-  }, [state, config, cleanupSoxProcess]);
+  }, [state, config, cleanupSoxProcess, saveTranscriptionToHistory]);
 
+const handleTranscriptionComplete = useCallback(async (text: string) => {
+    cleanupSoxProcess(); // Ensure cleanup before closeMainWindow
+
+    // Prefs to copy/paste immediately
+    if (DEFAULT_ACTION === "paste") {
+      await Clipboard.paste(text);
+      await showHUD("Pasted transcribed text"); 
+      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+    } else if (DEFAULT_ACTION === "copy") {
+      await Clipboard.copy(text);
+      await showHUD("Copied to clipboard");
+      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+    } else {
+      // Action is "none", stay in "done" state
+      showToast({ style: Toast.Style.Success, title: "Transcription complete" });
+    }
+  }, [DEFAULT_ACTION, cleanupSoxProcess]);
 
   const generateWaveformMarkdown = useCallback(() => {
     const waveformHeight = 18;
@@ -446,23 +520,7 @@ export default function Command() {
     return waveform;
   }, [waveformSeed]);
 
-  const handleTranscriptionComplete = useCallback(async (text: string) => {
-    cleanupSoxProcess(); // Ensure cleanup happens *before* potential closeMainWindow
-
-    // Prefs to copy/paste immediately
-    if (DEFAULT_ACTION === "paste") {
-      await Clipboard.paste(text);
-      await showHUD("Pasted transcribed text"); 
-      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-    } else if (DEFAULT_ACTION === "copy") {
-      await Clipboard.copy(text);
-      await showHUD("Copied to clipboard");
-      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-    } else {
-      // Action is "none", stay in "done" state
-      showToast({ style: Toast.Style.Success, title: "Transcription complete" });
-    }
-  }, [DEFAULT_ACTION, cleanupSoxProcess]);
+  
 
 
   const getActionPanel = useCallback(() => {
@@ -543,7 +601,6 @@ export default function Command() {
     <Form
       isLoading={state === "transcribing"}
       actions={getActionPanel()}
-      // Add navigationTitle based on state for clarity
       navigationTitle={
          state === "transcribing" ? "Transcribing..." :
          state === "done" ? "Transcription Result" :

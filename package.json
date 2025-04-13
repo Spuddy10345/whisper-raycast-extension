@@ -21,6 +21,12 @@
       "name": "download-model",
       "description": "Choose and download a model for transcription",
       "mode": "view"
+    },
+    {
+      "title": "Dictation History",
+      "name": "dictation-history",
+      "description": "View, copy, and manage past transcriptions",
+      "mode": "view" 
     }
   ],
   "preferences": [

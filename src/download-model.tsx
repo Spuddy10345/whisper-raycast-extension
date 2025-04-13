@@ -1,5 +1,5 @@
 import { List, ActionPanel, Action, environment, showToast, Toast, LocalStorage, Icon, confirmAlert, Alert } from "@raycast/api";
-import { useState, useEffect, useCallback } from "react"; // Added useCallback
+import { useState, useEffect, useCallback } from "react";
 import * as https from 'https';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -20,7 +20,7 @@ const models: WhisperModel[] = [
     { key: "base", name: "Base Multilingual", filename: "ggml-base.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin?download=true", size: "148 MB" },
     { key: "small", name: "Small Multilingual", filename: "ggml-small.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin?download=true", size: "488 MB" },
     { key: "medium", name: "Medium Multilingual", filename: "ggml-medium.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin?download=true", size: "1.53 GB" },
-    { key: "large.en", name: "Large Multilingual", filename: "ggml-large-v3.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true", size: "3.1 GB" },
+    { key: "large", name: "Large Multilingual", filename: "ggml-large-v3.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true", size: "3.1 GB" },
 ];
 
 const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
@@ -177,14 +177,14 @@ export default function DownloadModelCommand() {
 
              response.on('error', (err) => {
                console.error(`Response stream error during download for ${model.filename}:`, err);
-               fs.unlink(destinationPath, () => {}); // Attempt delete, ignore error
-               reject(err); // Reject promise on response stream error
+               fs.unlink(destinationPath, () => {}); 
+               reject(err); 
              });
 
            }).on('error', (err) => {
              console.error(`HTTPS request error for ${model.url}:`, err);
-             fs.unlink(destinationPath, () => {}); // Attempt delete, ignore error
-             reject(err); // Reject promise on initial request error
+             fs.unlink(destinationPath, () => {}); 
+             reject(err); 
            });
         };
         request(model.url); // Initial request
@@ -327,7 +327,7 @@ export default function DownloadModelCommand() {
                           title={`Delete ${model.name}`}
                           icon={Icon.Trash}
                           style={Action.Style.Destructive}
-                          onAction={() => deleteModel(model)} // Pass model object
+                          onAction={() => deleteModel(model)} 
                           shortcut={{ modifiers: ["ctrl"], key: "x" }} 
                        />
                     )}
