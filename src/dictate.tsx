@@ -507,7 +507,6 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
           const trimmedText = stdout.trim();
           console.log("Transcribed text:", trimmedText);
           setTranscribedText(trimmedText);
-          await saveTranscriptionToHistory(trimmedText);
 
           await handleTranscriptionComplete(trimmedText);
         }
@@ -543,6 +542,7 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
     }
 
     setTranscribedText(finalText);
+    await saveTranscriptionToHistory(finalText); 
     setState("done");
 
     if (DEFAULT_ACTION === "paste") {
