@@ -134,7 +134,7 @@
       "type": "textfield",
       "required": false,
       "title": "Ollama Endpoint",
-      "description": "URL of your Ollama server with OpenAI-compatible API",
+      "description": "URL of your Ollama server with OpenAI-compatible API (v1)",
       "placeholder": "http://localhost:11434",
       "default": "http://localhost:11434"
     },
@@ -143,9 +143,9 @@
       "type": "textfield",
       "required": false,
       "title": "Ollama Model",
-      "description": "Name of the model to use with Ollama (e.g., llama3, mistral, codellama)",
-      "placeholder": "llama3",
-      "default": "llama3"
+      "description": "Name of the model to use with Ollama (e.g. llama3.2:latest, qwen2.5:3B, phi4:latest)",
+      "placeholder": "llama3.2:latest",
+      "default": "llama3.2:latest"
     }
   ],
   "dependencies": {

@@ -13,15 +13,19 @@ import {
     confirmAlert,
     Alert,
     getPreferenceValues,
+    popToRoot,
     closeMainWindow,
     PopToRootType,
   } from "@raycast/api";
   import { useCallback, useState, useEffect } from "react";
-  import { useCachedState } from "@raycast/utils";
+  import { useCachedState, getProgressIcon } from "@raycast/utils";
+  import { fetch } from "cross-fetch";
   
   // Keys for LocalStorage to store prompt configs
   const AI_PROMPTS_KEY = "aiPrompts";
   const ACTIVE_PROMPT_ID_KEY = "activePromptId";
+
+  type OllamaStatus = "checking" | "online" | "offline";
   
   interface Preferences {
     aiRefinementMethod: "disabled" | "raycast" | "ollama";
@@ -42,13 +46,12 @@ export default function ConfigureAI() {
     const canAccessAI = environment.canAccess("AI");
     // Get prefs
     const preferences = getPreferenceValues<Preferences>();
-
     // State for storing list of AI prompts
     const [prompts, setPrompts] = useCachedState<AIPrompt[]>("aiPrompts", [
         {
             id: "default",
             name: "Email Format",
-            prompt: "Reformat this dictation as a professional email. Keep all facts and information from the original text, keep the wording similair just reformat and fix any grammatical errors. Add appropriate greeting and signature if needed, but don't include a subject.",
+            prompt: "Reformat this dictation as a professional email. Keep all facts and information from the original text, keep the wording similair just reformat and fix any grammatical errors. Add appropriate greeting and signature if needed, but don't include a subject line.",
         },
         {
             id: "bullet",
@@ -73,6 +76,8 @@ export default function ConfigureAI() {
     const [isShowingPromptForm, setIsShowingPromptForm] = useState(false);
     // State to hold prompt being edited 
     const [editingPrompt, setEditingPrompt] = useState<AIPrompt | null>(null);
+    // State to check if Ollama is online
+    const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>("checking");
 
     // Save the prompts list whenever it changes
     useEffect(() => {
@@ -93,8 +98,35 @@ export default function ConfigureAI() {
                 title: "Active prompt updated",
             });
         },
-        [setActivePromptId] 
-    );
+        [setActivePromptId]);
+
+        useEffect(() => {
+            if (preferences.aiRefinementMethod === "ollama") {
+                setOllamaStatus("checking");
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+    
+                fetch(preferences.ollamaEndpoint, { signal: controller.signal })
+                    .then((response) => {
+                        clearTimeout(timeoutId);
+                        if (response.ok || response.status === 405) { 
+                            setOllamaStatus("online");
+                        } else {
+                            setOllamaStatus("offline");
+                        }
+                    })
+                    .catch(() => {
+                        clearTimeout(timeoutId);
+                        setOllamaStatus("offline");
+                    });
+    
+                return () => {
+                    clearTimeout(timeoutId);
+                    controller.abort(); // Cleanup on unmount or dep change
+                };
+            }
+        }, [preferences.aiRefinementMethod, preferences.ollamaEndpoint]);
+    
 
     // Handle deleting a prompt
     const handleDeletePrompt = useCallback(
@@ -185,7 +217,7 @@ export default function ConfigureAI() {
                                     return;
                                 }
                                 const newPrompt: AIPrompt = {
-                                    id: editingPrompt ? editingPrompt.id : Date.now().toString(), // Use existing ID or generate new one
+                                    id: editingPrompt ? editingPrompt.id : Date.now().toString(), 
                                     name: values.name,
                                     prompt: values.prompt,
                                 };
@@ -231,7 +263,7 @@ export default function ConfigureAI() {
                 <List.Item
                     icon={
                         preferences.aiRefinementMethod !== "disabled"
-                            ? { source: Icon.Checkmark, tintColor: Color.Green }
+                            ? { source: Icon.CheckCircle, tintColor: Color.Green }
                             : { source: Icon.XMarkCircle, tintColor: Color.Red }
                     }
                     title={
@@ -258,7 +290,14 @@ export default function ConfigureAI() {
                     ]}
                     actions={
                         <ActionPanel>
-                            <Action title="Open Extension Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
+                            <Action
+                                title="Open Extension Preferences"
+                                icon={Icon.Gear}
+                                onAction={() => {
+                                    openExtensionPreferences();
+                                    closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+                                }}
+                            />
                         </ActionPanel>
                     }
                 />
@@ -267,10 +306,23 @@ export default function ConfigureAI() {
                         icon={{ source: Icon.Network }}
                         title="Ollama Endpoint"
                         subtitle={preferences.ollamaEndpoint}
-                        accessories={[{ tag: { value: preferences.ollamaModel, color: Color.Blue } }]}
+                        accessories={[
+                            ollamaStatus === "checking"
+                                ? { tag: { value: "Checking...", color: Color.SecondaryText }, icon: getProgressIcon(0.5) }
+                                : ollamaStatus === "online"
+                                ? { tag: { value: "Online", color: Color.Green } }
+                                : { tag: { value: "Offline", color: Color.Red } },
+                        ]}
                         actions={
                             <ActionPanel>
-                                <Action title="Open Extension Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
+                                <Action
+                                    title="Open Extension Preferences"
+                                    icon={Icon.Gear}
+                                    onAction={() => {
+                                        openExtensionPreferences();
+                                        closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+                                    }}
+                                />
                             </ActionPanel>
                         }
                     />
@@ -314,7 +366,13 @@ export default function ConfigureAI() {
                                     onAction={() => handleDeletePrompt(prompt)}
                                     shortcut={{ modifiers: ["ctrl"], key: "x" }}
                                 />
-                                <Action title="Open Extension Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
+                                <Action title="Open Extension Preferences" icon={Icon.Gear} 
+                                onAction={
+                                    () => {
+                                        openExtensionPreferences();
+                                        closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+                                    }
+                                } />
                             </ActionPanel>
                         }
                     />

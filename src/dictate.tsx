@@ -48,7 +48,6 @@ interface TranscriptionHistoryItem {
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav"); 
 const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
 const HISTORY_STORAGE_KEY = "dictationHistory";
-const prompt = "Write the following in email format, the greeting line should be Hey < persons name>, and separate it from the body with newlines. Always sign off with Best, Fin. Do not include a subject line or add additional language. If a calendar link is included do not modify it, or surround it with angle brackets"; // Default prompt for whisper
 const AI_PROMPTS_KEY = "aiPrompts";
 const ACTIVE_PROMPT_ID_KEY = "activePromptId"; 
 
@@ -88,7 +87,7 @@ export default function Command() {
           {
             id: "default",
             name: "Email Format",
-            prompt: "Reformat this dictation as a professional email. Keep all facts and information from the original text. Add appropriate greeting and signature if needed.",
+            prompt: "Reformat this dictation as a professional email. Do not include a subject line. Keep all facts and information from the original text. Add appropriate greeting and signature if needed.",
             isDefault: true,
           }
         ];
@@ -130,7 +129,7 @@ export default function Command() {
           {
             id: "default",
             name: "Email Format",
-            prompt: "Reformat this dictation as a professional email. Keep all facts and information from the original text. Add appropriate greeting and signature if needed.",
+            prompt: "Reformat this dictation as a professional email. Do not include a subject line. Keep all facts and information from the original text. Add appropriate greeting and signature if needed.",
             isDefault: true,
           }
         ];
@@ -139,9 +138,9 @@ export default function Command() {
       // Find the active prompt
       const activePrompt = prompts.find((p: any) => p.id === activePromptId) || prompts[0];
       
-      // Remove slash frome user endpoint if present
+      // Remove slash frome endpoint if present
       const baseEndpoint = endpoint.endsWith("/") ? endpoint.slice(0, -1) : endpoint;
-      const ollamaUrl = `${baseEndpoint}/v1/chat/completions`; // Use the full completions endpoint
+      const ollamaUrl = `${baseEndpoint}/v1/chat/completions`; 
       
       console.log(`Calling Ollama endpoint: ${ollamaUrl} with model: ${model}`);
       
@@ -164,6 +163,11 @@ export default function Command() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Ollama API error (${response.status}): ${errorText}`);
+        await showToast({
+          style: Toast.Style.Failure,
+          title: "Ollama API Error",
+          message: `Error ${response.status}: ${errorText}`,
+        });
         throw new Error(`Ollama API error (${response.status}): ${errorText}`);
       }
       
@@ -174,6 +178,11 @@ export default function Command() {
         return data.choices[0].message.content.trim();
       } else {
         console.error("Unexpected Ollama response structure:", data);
+        await showToast({
+          style: Toast.Style.Failure,
+          title: "Unexpected Response from Ollama",
+          message: "Unexpected response structure from Ollama API.",
+        });
         throw new Error("Failed to parse response from Ollama.");
       }
       
@@ -183,18 +192,14 @@ export default function Command() {
       let title = "Ollama Refinement Failed";
       let message = error instanceof Error ? error.message : "Unknown error";
 
-      // Checks for connection errors
+      // Check for connection errors
       if (error instanceof TypeError && error.message.includes("fetch")) {
          title = "Ollama Connection Failed";
          message = `Could not connect to the Ollama server at ${endpoint}. Please ensure it's running and accessible.`;
       }
 
-      await showToast({
-        style: Toast.Style.Failure,
-        title: title,
-        message: message,
-      });
-      return text; // Return original text on error
+      await showFailureToast(message, { title: title });
+      throw error; 
     }
   }
   
@@ -235,12 +240,10 @@ export default function Command() {
       
       toast.style = Toast.Style.Success;
       toast.title = "AI Refinement Complete";
-      
       return refinedText;
+
     } catch (error) {
-      toast.style = Toast.Style.Failure;
-      toast.title = "AI Refinement Failed";
-      toast.message = error instanceof Error ? error.message : "Unknown error";
+      console.error("AI refinement failed in refineText:", error);
       return text; // Return original text on error
     }
   }
@@ -622,7 +625,7 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
 
     // Execute whisper-cli
     exec(
-      `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps --prompt "${prompt}"`, 
+      `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps`, 
       async (error, stdout, stderr) => {
         // Always clean up audio file after exec finishes
         cleanupSoxProcess();
@@ -737,7 +740,11 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
             <Action title="Stop and Transcribe" icon={Icon.Stop} onAction={stopRecordingAndTranscribe} />
             <Action title="Cancel Recording" icon={Icon.XMarkCircle} shortcut={{ modifiers: ["cmd"], key: "." }} onAction={() => {
                cleanupSoxProcess();
-               closeMainWindow();
+               closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+           }}/>
+            <Action title="Retry Recording" icon={Icon.ArrowClockwise} shortcut={{ modifiers: ["cmd"], key: "r" }} onAction={() => {
+               cleanupSoxProcess();
+               setState("idle");
             }}/>
           </ActionPanel>
         );
@@ -765,14 +772,18 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
          return (
            <ActionPanel>
               {/* Allow to quickly open preferences if config error */}
-              <Action title="Open Extension Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
+              <Action title="Open Extension Preferences"
+              icon={Icon.Gear}
+               onAction={() => {
+                openExtensionPreferences();
+                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+               }}/>
               <Action title="Retry (Reopen Command)" icon={Icon.ArrowClockwise} onAction={() => {
-                   closeMainWindow();
-                   showHUD("Please reopen the Dictate Text command.");
+                  showHUD("Please reopen the Dictate Text command.");
+                  closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
                }}/>
                <Action title="Download Model" icon={Icon.Download} onAction={async () => {
-                   await launchCommand({ name: "download-model", type: LaunchType.UserInitiated });
-                   closeMainWindow();
+                  await launchCommand({ name: "download-model", type: LaunchType.UserInitiated });
                }}/>
               <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
            </ActionPanel>
