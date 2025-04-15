@@ -101,7 +101,7 @@
           "value": "raycast"
         },
         {
-          "title": "Ollama (Local)",
+          "title": "Ollama/External API",
           "value": "ollama"
         }
       ],
@@ -111,7 +111,7 @@
       "name": "aiModel",
       "type": "dropdown",
       "required": false,
-      "title": "AI Model",
+      "title": "Raycast AI Model",
       "description": "Select which AI model to use for refinement",
       "data": [
         {

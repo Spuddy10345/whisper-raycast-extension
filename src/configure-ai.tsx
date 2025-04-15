@@ -17,30 +17,30 @@ import {
     closeMainWindow,
     PopToRootType,
   } from "@raycast/api";
-  import { useCallback, useState, useEffect } from "react";
-  import { useCachedState, getProgressIcon } from "@raycast/utils";
-  import { fetch } from "cross-fetch";
-  
-  // Keys for LocalStorage to store prompt configs
-  const AI_PROMPTS_KEY = "aiPrompts";
-  const ACTIVE_PROMPT_ID_KEY = "activePromptId";
+import { useCallback, useState, useEffect, useRef } from "react";
+import { useCachedState, getProgressIcon } from "@raycast/utils";
+import { fetch } from "cross-fetch";
 
-  type OllamaStatus = "checking" | "online" | "offline";
-  
-  interface Preferences {
+// Keys for LocalStorage to store prompt configs
+const AI_PROMPTS_KEY = "aiPrompts";
+const ACTIVE_PROMPT_ID_KEY = "activePromptId";
+
+type APIStatus = "checking" | "online" | "offline";
+
+interface Preferences {
     aiRefinementMethod: "disabled" | "raycast" | "ollama";
     aiModel: string;
     ollamaEndpoint: string;
     ollamaApiKey: string;
     ollamaModel: string;
-  }
-  
-  interface AIPrompt {
+}
+
+interface AIPrompt {
     id: string;
     name: string;
     prompt: string;
-  }
-  
+}
+
 // Main component for configuring AI prompts
 export default function ConfigureAI() {
     // Check if user has access to Raycast AI features
@@ -77,8 +77,8 @@ export default function ConfigureAI() {
     const [isShowingPromptForm, setIsShowingPromptForm] = useState(false);
     // State to hold prompt being edited 
     const [editingPrompt, setEditingPrompt] = useState<AIPrompt | null>(null);
-    // State to check if Ollama is online
-    const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>("checking");
+    // State to check if API is online
+    const [ollamaStatus, setOllamaStatus] = useState<APIStatus>("checking");
 
     // Save the prompts list whenever it changes
     useEffect(() => {
@@ -101,33 +101,65 @@ export default function ConfigureAI() {
         },
         [setActivePromptId]);
 
-        useEffect(() => {
-            if (preferences.aiRefinementMethod === "ollama") {
-                setOllamaStatus("checking");
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
-    
-                fetch(preferences.ollamaEndpoint, { signal: controller.signal })
+    useEffect(() => {
+        if (preferences.aiRefinementMethod === "ollama") {
+            setOllamaStatus("checking");
+
+            const controller = new AbortController();
+            // 5 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 5000); 
+
+            // Checks ollama first
+            fetch(preferences.ollamaEndpoint, { signal: controller.signal })
+                .then((response) => {
+                    if (response.ok || response.status === 405) {
+                        clearTimeout(timeoutId);
+                        finishProgress(true);
+                    } else {
+                        // If Ollama check fails, try external endpoint 
+                        tryExternalAPICheck();
+                    }
+                })
+                .catch(() => {
+                    // If Ollama check throws error, do the same
+                    tryExternalAPICheck();
+                });
+
+            // Function for external API check
+            function tryExternalAPICheck() {
+                const modelsEndpoint = `${preferences.ollamaEndpoint.replace(/\/+$/, '')}/v1/models`;
+                const headers: HeadersInit = {};
+
+                if (preferences.ollamaApiKey) {
+                    headers["Authorization"] = `Bearer ${preferences.ollamaApiKey}`;
+                }
+
+                fetch(modelsEndpoint, {
+                    signal: controller.signal,
+                    headers
+                })
                     .then((response) => {
                         clearTimeout(timeoutId);
-                        if (response.ok || response.status === 405) { 
-                            setOllamaStatus("online");
-                        } else {
-                            setOllamaStatus("offline");
-                        }
+                        finishProgress(response.ok);
                     })
                     .catch(() => {
                         clearTimeout(timeoutId);
-                        setOllamaStatus("offline");
+                        finishProgress(false);
                     });
-    
-                return () => {
-                    clearTimeout(timeoutId);
-                    controller.abort(); // Cleanup on unmount or dep change
-                };
             }
-        }, [preferences.aiRefinementMethod, preferences.ollamaEndpoint]);
-    
+
+            // Helper to set final status
+            function finishProgress(success: boolean) {
+                // Set the connection status
+                setOllamaStatus(success ? "online" : "offline");
+            }
+
+            return () => {
+                clearTimeout(timeoutId);
+                controller.abort();
+            };
+        }
+    }, [preferences.aiRefinementMethod, preferences.ollamaEndpoint, preferences.ollamaApiKey]);
 
     // Handle deleting a prompt
     const handleDeletePrompt = useCallback(
@@ -152,7 +184,7 @@ export default function ConfigureAI() {
                     setActivePromptId(updatedPrompts[0].id);
                 } else if (updatedPrompts.length === 0) {
                     // If no prompts left, clear active ID 
-                    setActivePromptId(""); 
+                    setActivePromptId("");
                 }
 
                 await showToast({
@@ -161,7 +193,7 @@ export default function ConfigureAI() {
                 });
             }
         },
-        [prompts, setPrompts, activePromptId, setActivePromptId] 
+        [prompts, setPrompts, activePromptId, setActivePromptId]
     );
 
     // Save a new or edited prompt
@@ -182,7 +214,7 @@ export default function ConfigureAI() {
                 title: editingPrompt ? "Prompt updated" : "Prompt added",
             });
         },
-        [prompts, setPrompts, editingPrompt] 
+        [prompts, setPrompts, editingPrompt]
     );
 
     // If Raycast AI not accessible, show empty view prompting for Pro
@@ -218,7 +250,7 @@ export default function ConfigureAI() {
                                     return;
                                 }
                                 const newPrompt: AIPrompt = {
-                                    id: editingPrompt ? editingPrompt.id : Date.now().toString(), 
+                                    id: editingPrompt ? editingPrompt.id : Date.now().toString(),
                                     name: values.name,
                                     prompt: values.prompt,
                                 };
@@ -241,14 +273,14 @@ export default function ConfigureAI() {
                     id="name"
                     title="Name"
                     placeholder="E.g., Meeting Notes Format"
-                    defaultValue={editingPrompt?.name} 
+                    defaultValue={editingPrompt?.name}
                     autoFocus
                 />
                 <Form.TextArea
                     id="prompt"
                     title="Prompt"
                     placeholder="Instructions for how AI should refine the transcription..."
-                    defaultValue={editingPrompt?.prompt} 
+                    defaultValue={editingPrompt?.prompt}
                 />
                 <Form.Description
                     title="Prompt Tips"
@@ -271,15 +303,17 @@ export default function ConfigureAI() {
                         preferences.aiRefinementMethod === "disabled"
                             ? "AI Refinement Disabled"
                             : preferences.aiRefinementMethod === "raycast"
-                            ? "Using Raycast AI"
-                            : "Using Ollama (Local)"
+                                ? "Using Raycast AI"
+                                : preferences.aiRefinementMethod === "ollama"
+                                    ? "Using Ollama/API"
+                                    : "Using OpenAI-Compatible API"
                     }
                     subtitle={
                         preferences.aiRefinementMethod === "disabled"
                             ? "Enable in preferences to use AI refinement"
                             : preferences.aiRefinementMethod === "raycast"
-                            ? `Model: ${preferences.aiModel.replace("OpenAI_", "").replace("Anthropic_", "")}` // Clean up model name
-                            : `Model: ${preferences.ollamaModel}`
+                                ? `Model: ${preferences.aiModel.replace("OpenAI_", "").replace("Anthropic_", "")}` // Clean up model name
+                                : `Model: ${preferences.ollamaModel}`
                     }
                     accessories={[
                         {
@@ -305,14 +339,16 @@ export default function ConfigureAI() {
                 {preferences.aiRefinementMethod === "ollama" && (
                     <List.Item
                         icon={{ source: Icon.Network }}
-                        title="Ollama Endpoint"
+                        title="AI Endpoint"
                         subtitle={preferences.ollamaEndpoint}
                         accessories={[
                             ollamaStatus === "checking"
-                                ? { tag: { value: "Checking...", color: Color.SecondaryText }, icon: getProgressIcon(0.5) }
+                                ? {
+                                    tag: { value: "Checking...", color: Color.SecondaryText }
+                                }
                                 : ollamaStatus === "online"
-                                ? { tag: { value: "Online", color: Color.Green } }
-                                : { tag: { value: "Offline", color: Color.Red } },
+                                    ? { tag: { value: "Connected", color: Color.Green } }
+                                    : { tag: { value: "Disconnected", color: Color.Red } },
                         ]}
                         actions={
                             <ActionPanel>
@@ -337,7 +373,7 @@ export default function ConfigureAI() {
                         icon={
                             activePromptId === prompt.id
                                 ? { source: Icon.Checkmark, tintColor: Color.Green } // Green check if active
-                                : { source: Icon.Document } 
+                                : { source: Icon.Document }
                         }
                         title={prompt.name}
                         subtitle={prompt.prompt.length > 50 ? `${prompt.prompt.substring(0, 50)}...` : prompt.prompt} // Truncate long prompts
@@ -355,8 +391,8 @@ export default function ConfigureAI() {
                                     title="Edit Prompt"
                                     icon={Icon.Pencil}
                                     onAction={() => {
-                                        setEditingPrompt(prompt); 
-                                        setIsShowingPromptForm(true); 
+                                        setEditingPrompt(prompt);
+                                        setIsShowingPromptForm(true);
                                     }}
                                     shortcut={{ modifiers: ["cmd"], key: "e" }}
                                 />
@@ -367,13 +403,13 @@ export default function ConfigureAI() {
                                     onAction={() => handleDeletePrompt(prompt)}
                                     shortcut={{ modifiers: ["ctrl"], key: "x" }}
                                 />
-                                <Action title="Open Extension Preferences" icon={Icon.Gear} 
-                                onAction={
-                                    () => {
-                                        openExtensionPreferences();
-                                        closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-                                    }
-                                } />
+                                <Action title="Open Extension Preferences" icon={Icon.Gear}
+                                    onAction={
+                                        () => {
+                                            openExtensionPreferences();
+                                            closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+                                        }
+                                    } />
                             </ActionPanel>
                         }
                     />
@@ -387,8 +423,8 @@ export default function ConfigureAI() {
                                 title="Add New Prompt"
                                 icon={Icon.Plus}
                                 onAction={() => {
-                                    setIsShowingPromptForm(true); 
-                                    setEditingPrompt(null); 
+                                    setIsShowingPromptForm(true);
+                                    setEditingPrompt(null);
                                 }}
                             />
                         </ActionPanel>

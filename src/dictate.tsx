@@ -302,11 +302,11 @@ export default function Command() {
       setState("configuring");
       console.log("Starting configuration check...");
   
-      // Read all prefs
+      // Read all prefs, get paths
       const prefs = getPreferenceValues<Preferences>();
       let whisperExecPath = prefs.whisperExecutable;
       let modelOverridePath = prefs.modelPath;
-      let soxPath = prefs.soxExecutablePath; // Get SoX path from prefs
+      let soxPath = prefs.soxExecutablePath; 
   
       // Validate sox path
       if (!soxPath || !fs.existsSync(soxPath)) {
@@ -568,8 +568,48 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
     }
   }, []);
 
-
   
+  const handleTranscriptionComplete = useCallback(async (text: string) => {
+    let finalText = text;
+    
+    // Apply AI refinement if enabled and text is not empty
+    if (preferences.aiRefinementMethod !== "disabled" && text && text !== "[BLANK_AUDIO]") {
+      try {
+        finalText = await refineText(text);
+      } catch (error) {
+        console.error("AI refinement error:", error);
+        finalText = text; // Use original text on error
+      }
+    } else {
+      console.log("AI refinement skipped.");
+    }
+  
+    setTranscribedText(finalText);
+    await saveTranscriptionToHistory(finalText); 
+    setState("done");
+  
+    if (DEFAULT_ACTION === "paste") {
+      await Clipboard.paste(finalText);
+      await showHUD("Pasted transcribed text");
+      cleanupSoxProcess(); // Cleanup before closing
+      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+    } else if (DEFAULT_ACTION === "copy") {
+      await Clipboard.copy(finalText);
+      await showHUD("Copied to clipboard");
+      cleanupSoxProcess(); // Cleanup before closing
+      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+    } else {
+      // Action is "none", stay in "done" state
+      if (preferences.aiRefinementMethod === "disabled" || !aiErrorMessage) {
+         await showToast({ style: Toast.Style.Success, title: "Transcription complete" });
+      }
+    }
+  
+    if (DEFAULT_ACTION === "none") {
+        cleanupSoxProcess();
+    }
+  }, [DEFAULT_ACTION, cleanupSoxProcess, preferences.aiRefinementMethod, saveTranscriptionToHistory, aiErrorMessage]);
+
 
   const stopRecordingAndTranscribe = useCallback(async () => {
     // Use the current state value directly from the hook
@@ -645,71 +685,69 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
 
     // Execute whisper-cli
     exec(
-      `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps`, 
+      `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps`,
       async (error, stdout, stderr) => {
         // Always clean up audio file after exec finishes
         cleanupSoxProcess();
 
         if (error) {
-          console.error("whisper error:", error);
+          console.error("whisper exec error:", error);
           console.error("whisper stderr:", stderr);
-          const errMsg = stderr?.includes("invalid model") ? `Invalid or incompatible model file: ${config.modelPath}` :
-                         stderr?.includes("failed to load model") ? `Failed to load model: ${config.modelPath}` :
-                         `Transcription failed: ${stderr || error.message}`;
-          setErrorMessage(errMsg);
+
+          let title = "Transcription Failed";
+          let errMsg = `An unknown error occurred during transcription.`;
+
+          const stderrStr = stderr?.toString() || "";
+          const errorMsgStr = error?.message || "";
+
+          if (stderrStr.includes("invalid model") || stderrStr.includes("failed to load model")) {
+            title = "Model Error";
+            errMsg = `The model file at '${config.modelPath}' is invalid, incompatible, or failed to load. Please check the model file, if it's compatible with whisper.cpp (ggml) or select a different one in preferences.`;
+          } else if (stderrStr.includes("No such file or directory") || errorMsgStr.includes("ENOENT")) {
+             // This could be the executable or the model path specified in prefs
+             if (errorMsgStr.includes(config.execPath)) {
+                 title = "Whisper Executable Not Found";
+                 errMsg = `The whisper executable was not found at '${config.execPath}'. Please verify the path in preferences.`;
+             } else if (stderrStr.includes(config.modelPath) || errorMsgStr.includes(config.modelPath)) {
+                 title = "Model File Not Found";
+                 errMsg = `The model file specified at '${config.modelPath}' was not found. Please check the path in preferences or download the model using the Download whisper model command.`;
+             } else {
+                 title = "File Not Found";
+                 errMsg = `A required file or directory was not found. Double check your whisper-cli and model path. ${stderrStr}`;
+             }
+          } else if (stderrStr) {
+             // Prefer stderr message
+             errMsg = `Transcription failed. Details: ${stderrStr}`;
+          } else {
+             // Fallback to generic error message
+             errMsg = `Transcription failed: ${error.message}`;
+          }
+
+          setErrorMessage(errMsg); // Update state 
           setState("error");
+
+          // Show failure toast
+          await showFailureToast(errMsg, {
+            title: title,
+            primaryAction: {
+              title: "Open Extension Preferences",
+              onAction: () => openExtensionPreferences(),
+            },
+
+          });
+
         } else {
           console.log("Transcription successful.");
           const trimmedText = stdout.trim();
           console.log("Transcribed text:", trimmedText);
           setTranscribedText(trimmedText);
 
+          // Refine/present text
           await handleTranscriptionComplete(trimmedText);
         }
       }
     );
-  }, [state, config, cleanupSoxProcess, saveTranscriptionToHistory]);
-
-  const handleTranscriptionComplete = useCallback(async (text: string) => {
-    let finalText = text;
-    
-    // Apply AI refinement if enabled and text is not empty
-    if (preferences.aiRefinementMethod !== "disabled" && text && text !== "[BLANK_AUDIO]") {
-      try {
-        finalText = await refineText(text);
-      } catch (error) {
-        console.error("AI refinement error:", error);
-        finalText = text; // Use original text on error
-      }
-    } else {
-      console.log("AI refinement skipped.");
-    }
-  
-    setTranscribedText(finalText);
-    await saveTranscriptionToHistory(finalText); 
-    setState("done");
-  
-    if (DEFAULT_ACTION === "paste") {
-      await Clipboard.paste(finalText);
-      await showHUD("Pasted transcribed text");
-      cleanupSoxProcess(); // Cleanup before closing
-      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-    } else if (DEFAULT_ACTION === "copy") {
-      await Clipboard.copy(finalText);
-      await showHUD("Copied to clipboard");
-      cleanupSoxProcess(); // Cleanup before closing
-      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-    } else {
-      // Action is "none", stay in "done" state
-      if (preferences.aiRefinementMethod === "disabled" || !aiErrorMessage) {
-         await showToast({ style: Toast.Style.Success, title: "Transcription complete" });
-      }
-    }
-  
-    if (DEFAULT_ACTION === "none") {
-        cleanupSoxProcess();
-    }
-  }, [DEFAULT_ACTION, cleanupSoxProcess, preferences.aiRefinementMethod, saveTranscriptionToHistory, aiErrorMessage]);
+  }, [state, config, cleanupSoxProcess, saveTranscriptionToHistory, handleTranscriptionComplete]);
 
   const generateWaveformMarkdown = useCallback(() => {
     const waveformHeight = 18;
