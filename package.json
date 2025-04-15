@@ -133,17 +133,25 @@
       "name": "ollamaEndpoint",
       "type": "textfield",
       "required": false,
-      "title": "Ollama Endpoint",
-      "description": "URL of your Ollama server with OpenAI-compatible API (v1)",
+      "title": "Ollama/API Endpoint",
+      "description": "URL of your Ollama server or OpenAI compatible API (v1)",
       "placeholder": "http://localhost:11434",
       "default": "http://localhost:11434"
+    },
+    {
+      "name": "ollamaApiKey",
+      "type": "password",
+      "required": false,
+      "title": "API Key",
+      "description": "API key for authentication with the API server. Leave blank if not required.",
+      "placeholder": "Enter your API key"
     },
     {
       "name": "ollamaModel",
       "type": "textfield",
       "required": false,
-      "title": "Ollama Model",
-      "description": "Name of the model to use with Ollama (e.g. llama3.2:latest, qwen2.5:3B, phi4:latest)",
+      "title": "Model",
+      "description": "Name of the model to use with Ollama/External API (e.g. llama3.2:latest, gpt-4o-mini, claude-3-5-haiku-latest)",
       "placeholder": "llama3.2:latest",
       "default": "llama3.2:latest"
     }

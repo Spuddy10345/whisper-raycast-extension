@@ -31,6 +31,7 @@ import {
     aiRefinementMethod: "disabled" | "raycast" | "ollama";
     aiModel: string;
     ollamaEndpoint: string;
+    ollamaApiKey: string;
     ollamaModel: string;
   }
   

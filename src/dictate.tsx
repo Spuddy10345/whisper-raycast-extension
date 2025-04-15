@@ -34,6 +34,7 @@ interface Preferences {
   aiRefinementMethod: "disabled" | "raycast" | "ollama";
   aiModel: string;
   ollamaEndpoint: string;
+  ollamaApiKey: string;
   ollamaModel: string;
 }
 
@@ -64,6 +65,7 @@ export default function Command() {
   const [state, setState] = useState<CommandState>("configuring");
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [aiErrorMessage, setAiErrorMessage] = useState<string>("");
   const soxProcessRef = useRef<ChildProcessWithoutNullStreams | null>(null);
   const [waveformSeed, setWaveformSeed] = useState<number>(0);
   const [config, setConfig] = useState<Config | null>(null); 
@@ -105,12 +107,11 @@ export default function Command() {
       return refined.trim();
     } catch (error) {
       console.error("Raycast AI refinement failed:", error);
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "AI Refinement Failed",
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
-      return text; // Return original text on error
+      const errorMessage = error instanceof Error ? 
+        `Raycast AI refinement failed: ${error.message}` : 
+        "Raycast AI refinement failed: Unknown error";
+      setAiErrorMessage(errorMessage);
+      throw error;
     }
   }
 
@@ -144,12 +145,23 @@ export default function Command() {
       
       console.log(`Calling Ollama endpoint: ${ollamaUrl} with model: ${model}`);
       
+      // Get preferences to check for API key
+      const preferences = getPreferenceValues<Preferences>();
+      
+      // Setup headers
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      
+      // Add API key if it exists
+      if (preferences.ollamaApiKey) {
+        headers["Authorization"] = `Bearer ${preferences.ollamaApiKey}`;
+      }
+      
       // Fetch to call Ollama API
       const response = await fetch(ollamaUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: headers,
         body: JSON.stringify({
           model: model,
           messages: [
@@ -163,12 +175,9 @@ export default function Command() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Ollama API error (${response.status}): ${errorText}`);
-        await showToast({
-          style: Toast.Style.Failure,
-          title: "Ollama API Error",
-          message: `Error ${response.status}: ${errorText}`,
-        });
-        throw new Error(`Ollama API error (${response.status}): ${errorText}`);
+        const errorMessage = `Ollama API error (${response.status}): ${errorText}`;
+        setAiErrorMessage(errorMessage);
+        throw new Error(errorMessage);
       }
       
       const data = await response.json();
@@ -178,27 +187,31 @@ export default function Command() {
         return data.choices[0].message.content.trim();
       } else {
         console.error("Unexpected Ollama response structure:", data);
-        await showToast({
-          style: Toast.Style.Failure,
-          title: "Unexpected Response from Ollama",
-          message: "Unexpected response structure from Ollama API.",
-        });
+        const errorMessage = "Unexpected response structure from Ollama API.";
+        setAiErrorMessage(errorMessage);
         throw new Error("Failed to parse response from Ollama.");
       }
       
     } catch (error) {
       console.error("Ollama refinement failed:", error);
       
-      let title = "Ollama Refinement Failed";
-      let message = error instanceof Error ? error.message : "Unknown error";
+      let errorMessage = error instanceof Error ? error.message : "Unknown error";
 
       // Check for connection errors
       if (error instanceof TypeError && error.message.includes("fetch")) {
-         title = "Ollama Connection Failed";
-         message = `Could not connect to the Ollama server at ${endpoint}. Please ensure it's running and accessible.`;
+         errorMessage = `Could not connect to the Ollama server at ${endpoint}. Please ensure it's running and accessible.`;
       }
 
-      await showFailureToast(message, { title: title });
+      // Check for authentication errors
+      if (error instanceof Error && typeof error.message === "string") {
+        if (error.message.includes("401")) {
+          errorMessage = "Invalid API key or authentication error with the Ollama server.";
+        } else if (error.message.includes("403")) {
+          errorMessage = "Your API key doesn't have permission to access this resource.";
+        }
+      }
+
+      setAiErrorMessage(`Ollama refinement failed: ${errorMessage}`);
       throw error; 
     }
   }
@@ -217,11 +230,15 @@ export default function Command() {
     });
     
     try {
+      // Clear previous AI errors
+      setAiErrorMessage("");
+      
       let refinedText: string;
       
       if (preferences.aiRefinementMethod === "raycast") {
         // Check for Raycast AI access
         if (!environment.canAccess("AI")) {
+          setAiErrorMessage("Raycast Pro subscription required for AI features.");
           toast.style = Toast.Style.Failure;
           toast.title = "Raycast AI Not Available";
           toast.message = "Raycast Pro subscription required for AI features.";
@@ -244,6 +261,9 @@ export default function Command() {
 
     } catch (error) {
       console.error("AI refinement failed in refineText:", error);
+      toast.style = Toast.Style.Failure;
+      toast.title = "AI Refinement Failed";
+      
       return text; // Return original text on error
     }
   }
@@ -652,15 +672,14 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
 
   const handleTranscriptionComplete = useCallback(async (text: string) => {
     let finalText = text;
-    let refinementError = null; 
-  
+    
     // Apply AI refinement if enabled and text is not empty
     if (preferences.aiRefinementMethod !== "disabled" && text && text !== "[BLANK_AUDIO]") {
       try {
         finalText = await refineText(text);
       } catch (error) {
         console.error("AI refinement error:", error);
-        refinementError = error;
+        finalText = text; // Use original text on error
       }
     } else {
       console.log("AI refinement skipped.");
@@ -682,7 +701,7 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
       await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     } else {
       // Action is "none", stay in "done" state
-      if (preferences.aiRefinementMethod === "disabled" || !refinementError) {
+      if (preferences.aiRefinementMethod === "disabled" || !aiErrorMessage) {
          await showToast({ style: Toast.Style.Success, title: "Transcription complete" });
       }
     }
@@ -690,7 +709,7 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
     if (DEFAULT_ACTION === "none") {
         cleanupSoxProcess();
     }
-  }, [DEFAULT_ACTION, cleanupSoxProcess, preferences.aiRefinementMethod, saveTranscriptionToHistory]);
+  }, [DEFAULT_ACTION, cleanupSoxProcess, preferences.aiRefinementMethod, saveTranscriptionToHistory, aiErrorMessage]);
 
   const generateWaveformMarkdown = useCallback(() => {
     const waveformHeight = 18;
@@ -842,6 +861,12 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
        )}
        {state === 'transcribing' && (
            <Form.Description text="Processing audio, please wait..." />
+       )}
+       {state === 'done' && aiErrorMessage && (
+           <Form.Description 
+             title="AI Refinement Error" 
+             text={aiErrorMessage} 
+           />
        )}
     </Form>
   );
