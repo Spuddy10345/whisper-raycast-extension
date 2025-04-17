@@ -26,6 +26,7 @@ import fs from 'fs';
 import { showFailureToast } from "@raycast/utils"; 
 import crypto from "crypto";
 import { useConfiguration } from "./hooks/useConfiguration";
+import { useRecording } from "./hooks/useRecording";
 
 interface Preferences {
   whisperExecutable: string;
@@ -48,7 +49,6 @@ interface TranscriptionHistoryItem {
 
 // Paths
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav"); 
-const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
 const HISTORY_STORAGE_KEY = "dictationHistory";
 const AI_PROMPTS_KEY = "aiPrompts";
 const ACTIVE_PROMPT_ID_KEY = "activePromptId"; 
@@ -294,110 +294,21 @@ export default function Command() {
       });
   }, []); 
 
+  const cleanupAudioFile = useCallback(() => {
+    fs.promises.unlink(AUDIO_FILE_PATH)
+      .then(() => console.log("Cleaned up audio file."))
+      .catch((err) => {
+          if (err.code !== 'ENOENT') { // Ignore if file doesn't exist
+             console.error("Error cleaning up audio file:", err.message);
+          }
+      });
+  }, []);
+
   // Initialize and validate configuration
   useConfiguration(setState, setConfig, setErrorMessage);
   
-
-
-  // Effect to Start/Stop Recording 
-   useEffect(() => {
-    let isMounted = true; // Track mounted state 
-
-    if (state === "idle" && config) {
-      // Ensure dir for audio file exists
-      const audioDir = path.dirname(AUDIO_FILE_PATH);
-      fs.promises.mkdir(audioDir, { recursive: true })
-          .then(() => {
-              if (!isMounted) return; // Check mount status after async 
-              console.log("Configuration ready, starting recording.");
-              setState("recording"); 
-              showToast({ style: Toast.Style.Animated, title: "Recording...", message: "Press Enter to stop" });
-
-              fs.promises.mkdir(path.dirname(AUDIO_FILE_PATH), { recursive: true })
-              .then(() => {
-                  // spawn sox process 
-                  const args = [
-                     "-d", // Default device
-                     "-t", "wav", // Output WAV
-                     "--channels", "1", // Mono 
-                     "--rate", "16000", // Sample rate for whisper
-                     "--encoding", "signed-integer", // 16-bit PCM
-                     "--bits", "16",
-                     AUDIO_FILE_PATH,
-                   ];
-                  let process: ChildProcessWithoutNullStreams | null = null;
-                  try {
-                     process = spawn(config.soxPath, args);
-                     soxProcessRef.current = process;
-                     console.log(`Spawned sox process with PID: ${process.pid}`);
-                  } catch (err: any) {
-                     console.error("sox spawn synchronous error:", err);
-                     setErrorMessage(`Failed to start recording command. Error: ${err.message}`);
-                     if (isMounted) setState("error");
-                     return; 
-                  }
-
-                  process.on('error', (err) => {
-                     console.error(`sox process PID ${process?.pid} error event:`, err);
-                     soxProcessRef.current = null; // Clear ref on error
-                  });
-
-                  process.stderr.on('data', (data) => {
-                     console.log(`sox stderr PID ${process?.pid}: ${data.toString()}`);
-                  });
-
-                  process.on('close', (code, signal) => {
-                     console.log(`sox process PID ${process?.pid} closed. Code: ${code}, Signal: ${signal}`);
-                     if (soxProcessRef.current === process) {
-                      soxProcessRef.current = null;
-                      console.log("Cleared sox process ref due to close event.");
-                     }
-                  });
-               }) 
-              .catch(err => { 
-                 console.error("Error creating specific audio file directory:", err);
-                 if (isMounted) {
-                    setErrorMessage(`Failed to prepare audio file directory: ${err.message}`);
-                    setState("error");
-                 }
-              }); 
-           }) 
-          .catch(err => { 
-             console.error("Error creating base audio directory:", err);
-             if (isMounted) {
-                setErrorMessage(`Failed to prepare base audio directory: ${err.message}`);
-                setState("error");
-             }
-          }); 
-    } 
-
-    //Ensure process is stopped if component unmounts or dependencies change
-    return () => {
-      isMounted = false; // Mark as unmounted
-      console.log(`useEffect [state, config] cleanup. State during cleanup: ${state}`);
-  
-      // Only stop process if still referenced and not been killed
-      if (soxProcessRef.current) {
-        const processToCleanup = soxProcessRef.current;
-        console.log(`useEffect cleanup: Attempting to stop lingering sox process PID ${processToCleanup.pid}`);
-        soxProcessRef.current = null; // Clear ref
-        if (!processToCleanup.killed) {
-          try {
-            //SIGKILL to ensure killed as last resort
-            process.kill(processToCleanup.pid!, "SIGKILL");
-            console.log(`useEffect cleanup: Sent SIGKILL to PID ${processToCleanup.pid}`);
-          } catch (e) {
-            // Ignore errors like 'process already exited'
-            if (e instanceof Error && 'code' in e && e.code !== 'ESRCH') {
-               console.warn(`useEffect cleanup: Error sending SIGKILL to PID ${processToCleanup.pid}:`, e);
-            }
-          }
-        }
-      } else {
-          console.log("useEffect cleanup: No active sox process ref found.");
-      }
-    };
-  }, [state, config, cleanupSoxProcess]);
+  // Effect to Start/Stop Recording
+  useRecording(state, config, setState, setErrorMessage, soxProcessRef);
 
   // Effect for waveform animation
   useEffect(() => {
@@ -465,7 +376,7 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
   
   const handleTranscriptionComplete = useCallback(async (text: string) => {
     let finalText = text;
-    
+
     // Apply AI refinement if enabled and text is not empty
     if (preferences.aiRefinementMethod !== "disabled" && text && text !== "[BLANK_AUDIO]") {
       try {
@@ -477,32 +388,30 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
     } else {
       console.log("AI refinement skipped.");
     }
-  
+
     setTranscribedText(finalText);
-    await saveTranscriptionToHistory(finalText); 
-    setState("done");
-  
+    await saveTranscriptionToHistory(finalText);
+    setState("done"); 
+
     if (DEFAULT_ACTION === "paste") {
       await Clipboard.paste(finalText);
       await showHUD("Pasted transcribed text");
-      cleanupSoxProcess(); // Cleanup before closing
+      cleanupAudioFile();
       await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     } else if (DEFAULT_ACTION === "copy") {
       await Clipboard.copy(finalText);
       await showHUD("Copied to clipboard");
-      cleanupSoxProcess(); // Cleanup before closing
+      cleanupAudioFile(); 
       await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
     } else {
       // Action is "none", stay in "done" state
       if (preferences.aiRefinementMethod === "disabled" || !aiErrorMessage) {
          await showToast({ style: Toast.Style.Success, title: "Transcription complete" });
       }
+      // Clean up file when staying in 'done' state
+      cleanupAudioFile();
     }
-  
-    if (DEFAULT_ACTION === "none") {
-        cleanupSoxProcess();
-    }
-  }, [DEFAULT_ACTION, cleanupSoxProcess, preferences.aiRefinementMethod, saveTranscriptionToHistory, aiErrorMessage]);
+  }, [DEFAULT_ACTION, cleanupAudioFile, preferences.aiRefinementMethod, saveTranscriptionToHistory, aiErrorMessage, refineText, setTranscribedText, setState]);
 
 
   const stopRecordingAndTranscribe = useCallback(async () => {
@@ -524,30 +433,33 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
     // Capture current process reference 
     const processToStop = soxProcessRef.current;
 
+    if (processToStop) {
+      console.log(`Attempting to stop recording process PID: ${processToStop.pid}...`);
+      soxProcessRef.current = null;
+      console.log("Cleared sox process ref.");
+      try {
+         if (!processToStop.killed) {
+             process.kill(processToStop.pid!, "SIGTERM"); 
+             console.log(`Sent SIGTERM to PID ${processToStop.pid}`);
+         } else {
+            console.log(`Process ${processToStop.pid} was already killed.`);
+         }
+      } catch (e) {
+        // Handle potential errors (like process already exited )
+        if (e instanceof Error && 'code' in e && e.code !== 'ESRCH') {
+           console.warn(`Error stopping sox process PID ${processToStop.pid}:`, e);
+        } else {
+           console.log(`Process ${processToStop.pid} likely already exited.`);
+        }
+      }
+  } else {
+       console.warn("stopRecordingAndTranscribe: No active sox process reference found to stop. State might be inconsistent.");
+  }
+
     // Move to transcribing state
     setState("transcribing");
     showToast({ style: Toast.Style.Animated, title: "Transcribing..." });
     console.log("Set state to transcribing.");
-
-    // Stop sox process if running
-    if (processToStop) {
-        console.log(`Attempting to stop recording process PID: ${processToStop.pid}...`);
-        soxProcessRef.current = null; // Clear ref, or else...
-        console.log("Cleared sox process ref.");
-        try {
-           if (!processToStop.killed) {
-               process.kill(processToStop.pid!, "SIGTERM"); 
-               console.log(`Sent SIGTERM to PID ${processToStop.pid}`);
-           } else {
-              console.log(`Process ${processToStop.pid} was already killed.`);
-           }
-        } catch (e) {
-          console.warn(`Error stopping sox process PID ${processToStop.pid}:`, e);
-        }
-    } else {
-         console.warn("stopRecordingAndTranscribe: No active sox process reference found to stop.");
-    }
-
 
     //delay to ensure audio file written
     await new Promise(resolve => setTimeout(resolve, 300)); 
@@ -557,12 +469,10 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
     try {
       const stats = await fs.promises.stat(AUDIO_FILE_PATH);
       console.log(`Audio file stats: ${JSON.stringify(stats)}`);
-      
       // Check if file exists and has expected size 
       if (stats.size <= 44) {
         throw new Error(`Audio file is empty or too small (size: ${stats.size} bytes). Recording might have failed or captured no sound.`);
       }
-      
       console.log(`Audio file exists and has size ${stats.size}. Proceeding with transcription.`);
     } catch (fileError: any) {
       console.error(`Audio file check failed: ${AUDIO_FILE_PATH}`, fileError);
@@ -572,6 +482,7 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
       setErrorMessage(errorMsg);
       setState("error");
       cleanupSoxProcess(); 
+      cleanupAudioFile();
       return;
     }
 
@@ -632,11 +543,10 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
 
         } else {
           console.log("Transcription successful.");
-          const trimmedText = stdout.trim();
+          const trimmedText = stdout.trim() || "[BLANK_AUDIO]";
           console.log("Transcribed text:", trimmedText);
-          setTranscribedText(trimmedText);
 
-          // Refine/present text
+          // Pass text to handler to set state/save to history etc
           await handleTranscriptionComplete(trimmedText);
         }
       }
@@ -687,15 +597,30 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
       case "recording":
         return (
           <ActionPanel>
-            {/* Use callback directly */}
             <Action title="Stop and Transcribe" icon={Icon.Stop} onAction={stopRecordingAndTranscribe} />
             <Action title="Cancel Recording" icon={Icon.XMarkCircle} shortcut={{ modifiers: ["cmd"], key: "." }} onAction={() => {
-               cleanupSoxProcess();
+               const processToStop = soxProcessRef.current;
+               if (processToStop && !processToStop.killed) {
+                 try {
+                   process.kill(processToStop.pid!, "SIGKILL"); // Immediate stop
+                   console.log(`Cancel Recording: Sent SIGKILL to PID ${processToStop.pid}`);
+                 } catch (e) { /* Ignore ESRCH */ }
+                 soxProcessRef.current = null;
+               }
+               cleanupAudioFile(); // Clean up potentially partial file
                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
            }}/>
             <Action title="Retry Recording" icon={Icon.ArrowClockwise} shortcut={{ modifiers: ["cmd"], key: "r" }} onAction={() => {
-               cleanupSoxProcess();
-               setState("idle");
+               const processToStop = soxProcessRef.current;
+               if (processToStop && !processToStop.killed) {
+                 try {
+                   process.kill(processToStop.pid!, "SIGKILL");
+                   console.log(`Retry Recording: Sent SIGKILL to PID ${processToStop.pid}`);
+                 } catch (e) { /* Ignore ESRCH */ }
+                 soxProcessRef.current = null;
+               }
+               cleanupAudioFile();
+               setState("idle"); // Go back to idle to trigger recording start via useRecording hook
             }}/>
           </ActionPanel>
         );
