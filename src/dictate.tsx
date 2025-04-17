@@ -25,6 +25,7 @@ import path from 'path';
 import fs from 'fs';
 import { showFailureToast } from "@raycast/utils"; 
 import crypto from "crypto";
+import { useConfiguration } from "./hooks/useConfiguration";
 
 interface Preferences {
   whisperExecutable: string;
@@ -293,115 +294,8 @@ export default function Command() {
       });
   }, []); 
 
-  // Effect for checking config (exec and model path)
-  useEffect(() => {
-    let isMounted = true;
-  
-    async function checkConfiguration() {
-      if (!isMounted) return;
-      setState("configuring");
-      console.log("Starting configuration check...");
-  
-      // Read all prefs, get paths
-      const prefs = getPreferenceValues<Preferences>();
-      let whisperExecPath = prefs.whisperExecutable;
-      let modelOverridePath = prefs.modelPath;
-      let soxPath = prefs.soxExecutablePath; 
-  
-      // Validate sox path
-      if (!soxPath || !fs.existsSync(soxPath)) {
-         console.error(`SoX executable check failed: '${soxPath}'`);
-         const errorMsg = `SoX executable not found or not set at '${soxPath || "not set"}'. Please install SoX (e.g., 'brew install sox') and set the correct path in preferences.`;
-         setErrorMessage(errorMsg);
-         if (isMounted) setState("error");
-         await showFailureToast(errorMsg, {
-             title: "SoX Executable Not Found",
-             primaryAction: {
-                 title: "Open Extension Preferences",
-                 onAction: () => openExtensionPreferences(),
-             }
-         });
-         return; // Stop config check
-      }
-      console.log("Using SoX executable:", soxPath);
-  
-      // Validate whisper-cli path
-      if (!whisperExecPath || !fs.existsSync(whisperExecPath)) {
-        console.error(`Whisper executable check failed: '${whisperExecPath}'`);
-        const errorMsg = `Whisper executable not found at '${whisperExecPath || "not set"}'. \n\nEnsure whisper.cpp is installed and the path in preferences is correct. \nCommon paths:\n- Homebrew (Apple Silicon): /opt/homebrew/bin/whisper-cli\n- Homebrew (Intel): /usr/local/bin/whisper-cli`;
-        setErrorMessage(errorMsg);
-        if (isMounted) setState("error");
-        await showFailureToast(errorMsg, {
-            title: "Whisper Executable Not Found",
-            primaryAction: {
-                title: "Open Extension Preferences",
-                onAction: () => openExtensionPreferences(),
-            }
-        });
-        return;
-      }
-      console.log("Using Whisper executable:", whisperExecPath);
-  
-      // Get model path
-      let finalModelPath = "";
-      try {
-        const downloadedPath = await LocalStorage.getItem<string>(DOWNLOADED_MODEL_PATH_KEY);
-  
-        console.log("Pref Model Override Path:", modelOverridePath);
-        console.log("Downloaded Model Path:", downloadedPath);
-  
-        // Prioritize Preference Path
-        if (modelOverridePath && fs.existsSync(modelOverridePath)) {
-          console.log("Using preference override model path:", modelOverridePath);
-          finalModelPath = modelOverridePath;
-        } else if (downloadedPath && fs.existsSync(downloadedPath)) {
-          console.log("Using downloaded model path:", downloadedPath);
-          finalModelPath = downloadedPath;
-        } else {
-          console.error("No valid Whisper model found. Checked Pref Override:", modelOverridePath, "Checked LocalStorage:", downloadedPath);
-          const errorMsg = "No Whisper model found. Please run the 'Download Whisper Model' command or configure the path override in preferences.";
-          setErrorMessage(errorMsg);
-          if (isMounted) setState("error");
-          await showFailureToast(errorMsg, {
-              title: "Whisper Model Not Found",
-              primaryAction: {
-                 title: "Download Model",
-                 onAction: async () => {
-                     await launchCommand({ name: "download-model", type: LaunchType.UserInitiated });
-                     closeMainWindow(); // Close command after launching downloader
-                 }
-              }
-          });
-          return;
-        }
-      } catch (error) {
-        console.error("Failed to determine model path:", error);
-        const errorMsg = "Error accessing configuration. Check console logs.";
-        setErrorMessage(errorMsg);
-        if (isMounted) setState("error");
-        await showFailureToast(errorMsg, { title: "Configuration Error" });
-        return;
-      }
-  
-      // Config Successful
-      console.log("Configuration successful:", { whisperExecPath, finalModelPath, soxPath });
-      if (isMounted) {
-          // Set full config
-          setConfig({ execPath: whisperExecPath, modelPath: finalModelPath, soxPath: soxPath });
-          setErrorMessage("");
-          setState("idle");
-      }
-    }
-  
-    checkConfiguration();
-
-    // Cleanup function for effect
-    return () => {
-        isMounted = false;
-        console.log("checkConfiguration effect cleanup");
-    };
-    // Rerun on preference change
-  }, [preferences.whisperExecutable, preferences.modelPath, preferences.soxExecutablePath]);
+  // Initialize and validate configuration
+  useConfiguration(setState, setConfig, setErrorMessage);
   
 
 
