@@ -13,12 +13,11 @@ import {
     confirmAlert,
     Alert,
     getPreferenceValues,
-    popToRoot,
     closeMainWindow,
     PopToRootType,
   } from "@raycast/api";
-import { useCallback, useState, useEffect, useRef } from "react";
-import { useCachedState, getProgressIcon } from "@raycast/utils";
+import { useCallback, useState, useEffect } from "react";
+import { useCachedState } from "@raycast/utils";
 import { fetch } from "cross-fetch";
 
 // Keys for LocalStorage to store prompt configs

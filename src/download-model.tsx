@@ -14,12 +14,15 @@ interface WhisperModel {
 }
 
 const models: WhisperModel[] = [
+    { key: "tiny.en", name: "Tiny English", filename: "ggml-tiny.en.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin?download=true", size: "78 MB" },
     { key: "base.en", name: "Base English", filename: "ggml-base.en.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin?download=true", size: "148 MB" },
     { key: "small.en", name: "Small English", filename: "ggml-small.en.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin?download=true", size: "488 MB" },
     { key: "medium.en", name: "Medium English", filename: "ggml-medium.en.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin?download=true", size: "1.53 GB" },
+    { key: "tiny", name: "Tiny Multilingual", filename: "ggml-tiny.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin?download=true", size: "78 MB" },
     { key: "base", name: "Base Multilingual", filename: "ggml-base.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin?download=true", size: "148 MB" },
     { key: "small", name: "Small Multilingual", filename: "ggml-small.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin?download=true", size: "488 MB" },
     { key: "medium", name: "Medium Multilingual", filename: "ggml-medium.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin?download=true", size: "1.53 GB" },
+    { key: "turbo", name: "Turbo Multilingual", filename: "ggml-large-v3-turbo.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true", size: "1.62 GB" },
     { key: "large", name: "Large Multilingual", filename: "ggml-large-v3.bin", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true", size: "3.1 GB" },
 ];
 
