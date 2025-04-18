@@ -13,7 +13,13 @@ interface Config {
   modelPath: string;
   soxPath: string;
 }
-
+/**
+ * Hook to manage audio recording for transcription with SoX.
+ * @param config - Configuration object with paths to required executables and models
+ * @param setState - Function to update the command state
+ * @param setErrorMessage - Function to set error message when errors occur
+ * @param soxProcessRef - Mutable ref to track the SoX child process
+ */
 export function useRecording(
   state: CommandState,
   config: Config | null,

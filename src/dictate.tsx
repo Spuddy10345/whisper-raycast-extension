@@ -8,7 +8,6 @@ import {
   Icon,
   Detail,
   getPreferenceValues,
-  Clipboard,
   environment,
   LocalStorage,
   launchCommand,
@@ -19,14 +18,14 @@ import {
   AI,
 } from "@raycast/api";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { spawn, exec } from "child_process";
 import type { ChildProcessWithoutNullStreams } from "child_process";
 import path from 'path';
 import fs from 'fs';
-import { showFailureToast } from "@raycast/utils"; 
 import crypto from "crypto";
+// Import custom hooks
 import { useConfiguration } from "./hooks/useConfiguration";
 import { useRecording } from "./hooks/useRecording";
+import { useTranscription } from "./hooks/useTranscription";
 
 interface Preferences {
   whisperExecutable: string;
@@ -41,17 +40,17 @@ interface Preferences {
 }
 
 interface TranscriptionHistoryItem {
-  id: string;      
+  id: string;
   timestamp: number;
   text: string;
 }
 
 
 // Paths
-const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav"); 
+const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav");
 const HISTORY_STORAGE_KEY = "dictationHistory";
 const AI_PROMPTS_KEY = "aiPrompts";
-const ACTIVE_PROMPT_ID_KEY = "activePromptId"; 
+const ACTIVE_PROMPT_ID_KEY = "activePromptId";
 
 
 // Define states
@@ -69,18 +68,18 @@ export default function Command() {
   const [aiErrorMessage, setAiErrorMessage] = useState<string>("");
   const soxProcessRef = useRef<ChildProcessWithoutNullStreams | null>(null);
   const [waveformSeed, setWaveformSeed] = useState<number>(0);
-  const [config, setConfig] = useState<Config | null>(null); 
+  const [config, setConfig] = useState<Config | null>(null);
 
   const preferences = getPreferenceValues<Preferences>();
   const DEFAULT_ACTION = preferences.defaultAction || "none";
-  
+
   // Function to refine text using Raycast AI
   async function refineWithRaycastAI(text: string, modelId: string): Promise<string> {
     try {
       // Get active prompt
       const activePromptId = await LocalStorage.getItem<string>(ACTIVE_PROMPT_ID_KEY) || "default";
       const promptsJson = await LocalStorage.getItem<string>(AI_PROMPTS_KEY);
-      
+
       let prompts = [];
       if (promptsJson) {
         prompts = JSON.parse(promptsJson);
@@ -95,24 +94,24 @@ export default function Command() {
           }
         ];
       }
-      
+
       // Find the active prompt
       const activePrompt = prompts.find((p: any) => p.id === activePromptId) || prompts[0];
-      
+
       // Use AI to refine text
       const refined = await AI.ask(`${activePrompt.prompt}\n\nText to refine: "${text}"`, {
         model: AI.Model[modelId as keyof typeof AI.Model] || AI.Model["OpenAI_GPT4o-mini"],
         creativity: "medium",
       });
-      
+
       return refined.trim();
     } catch (error) {
       console.error("Raycast AI refinement failed:", error);
-      const errorMessage = error instanceof Error ? 
-        `Raycast AI refinement failed: ${error.message}` : 
+      const errorMessage = error instanceof Error ?
+        `Raycast AI refinement failed: ${error.message}` :
         "Raycast AI refinement failed: Unknown error";
-      setAiErrorMessage(errorMessage);
-      throw error;
+      setAiErrorMessage(errorMessage); 
+      throw error; // Re-throw to be caught by caller
     }
   }
 
@@ -121,7 +120,7 @@ export default function Command() {
       // Get active prompt
       const activePromptId = await LocalStorage.getItem<string>(ACTIVE_PROMPT_ID_KEY) || "default";
       const promptsJson = await LocalStorage.getItem<string>(AI_PROMPTS_KEY);
-      
+
       let prompts = [];
       if (promptsJson) {
         prompts = JSON.parse(promptsJson);
@@ -136,29 +135,29 @@ export default function Command() {
           }
         ];
       }
-      
+
       // Find the active prompt
       const activePrompt = prompts.find((p: any) => p.id === activePromptId) || prompts[0];
-      
+
       // Remove slash frome endpoint if present
       const baseEndpoint = endpoint.endsWith("/") ? endpoint.slice(0, -1) : endpoint;
-      const ollamaUrl = `${baseEndpoint}/v1/chat/completions`; 
-      
+      const ollamaUrl = `${baseEndpoint}/v1/chat/completions`;
+
       console.log(`Calling Ollama endpoint: ${ollamaUrl} with model: ${model}`);
-      
+
       // Get preferences to check for API key
       const preferences = getPreferenceValues<Preferences>();
-      
+
       // Setup headers
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-      
+
       // Add API key if it exists
       if (preferences.ollamaApiKey) {
         headers["Authorization"] = `Bearer ${preferences.ollamaApiKey}`;
       }
-      
+
       // Fetch to call Ollama API
       const response = await fetch(ollamaUrl, {
         method: "POST",
@@ -169,33 +168,33 @@ export default function Command() {
             { "role": "system", "content": activePrompt.prompt },
             { "role": "user", "content": text }
           ],
-          stream: false 
+          stream: false
         }),
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Ollama API error (${response.status}): ${errorText}`);
         const errorMessage = `Ollama API error (${response.status}): ${errorText}`;
-        setAiErrorMessage(errorMessage);
+        setAiErrorMessage(errorMessage); // Set AI error message state
         throw new Error(errorMessage);
       }
-      
+
       const data = await response.json();
-      
+
       // Extract content from response
       if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
         return data.choices[0].message.content.trim();
       } else {
         console.error("Unexpected Ollama response structure:", data);
         const errorMessage = "Unexpected response structure from Ollama API.";
-        setAiErrorMessage(errorMessage);
+        setAiErrorMessage(errorMessage); 
         throw new Error("Failed to parse response from Ollama.");
       }
-      
+
     } catch (error) {
       console.error("Ollama refinement failed:", error);
-      
+
       let errorMessage = error instanceof Error ? error.message : "Unknown error";
 
       // Check for connection errors
@@ -213,87 +212,65 @@ export default function Command() {
       }
 
       setAiErrorMessage(`Ollama refinement failed: ${errorMessage}`);
-      throw error; 
+      throw error; // Re-throw to be caught by caller
     }
   }
-  
+
   // Handles text refinement based on selected method
-  async function refineText(text: string): Promise<string> {
+  const refineText = useCallback(async (text: string): Promise<string> => {
     const preferences = getPreferenceValues<Preferences>();
-    
+
     if (preferences.aiRefinementMethod === "disabled") {
       return text;
     }
-    
+
     const toast = await showToast({
       style: Toast.Style.Animated,
       title: "Refining with AI...",
     });
-    
+
     try {
       // Clear previous AI errors
       setAiErrorMessage("");
-      
+
       let refinedText: string;
-      
+
       if (preferences.aiRefinementMethod === "raycast") {
         // Check for Raycast AI access
         if (!environment.canAccess("AI")) {
-          setAiErrorMessage("Raycast Pro subscription required for AI features.");
+          const msg = "Raycast Pro subscription required for AI features.";
+          setAiErrorMessage(msg); // Set error state
           toast.style = Toast.Style.Failure;
           toast.title = "Raycast AI Not Available";
-          toast.message = "Raycast Pro subscription required for AI features.";
-          return text;
+          toast.message = msg;
+          return text; // Return original text
         }
-        
+
         refinedText = await refineWithRaycastAI(text, preferences.aiModel);
       } else {
         // Use Ollama
         refinedText = await refineWithOllama(
-          text, 
-          preferences.ollamaEndpoint, 
+          text,
+          preferences.ollamaEndpoint,
           preferences.ollamaModel
         );
       }
-      
+
       toast.style = Toast.Style.Success;
       toast.title = "AI Refinement Complete";
       return refinedText;
 
     } catch (error) {
-      console.error("AI refinement failed in refineText:", error);
+            console.error("AI refinement failed in refineText:", error);
       toast.style = Toast.Style.Failure;
       toast.title = "AI Refinement Failed";
       
       return text; // Return original text on error
     }
-  }
+  }, [preferences.aiRefinementMethod, preferences.aiModel, preferences.ollamaEndpoint, preferences.ollamaModel]); // Dependencies
 
-  // Cleanup function for Sox process and audio file
-  const cleanupSoxProcess = useCallback(() => {
-    if (soxProcessRef.current) {
-      console.log("Cleaning up sox process...");
-      if (!soxProcessRef.current.killed) {
-        try {
-          // Attempt graceful shutdown 
-          process.kill(soxProcessRef.current.pid!, "SIGTERM"); 
-          console.log(`Sent SIGTERM to PID ${soxProcessRef.current.pid}`);
-        } catch (e) {
-          console.warn("Error sending SIGTERM/SIGKILL", e);
-        }
-      }
-      soxProcessRef.current = null;
-    }
-    // Clean up audio file using fs.promises for async/await pattern
-    fs.promises.unlink(AUDIO_FILE_PATH)
-      .then(() => console.log("Cleaned up audio file."))
-      .catch((err) => {
-          if (err.code !== 'ENOENT') {
-             console.error("Error cleaning up audio file:", err.message);
-          }
-      });
-  }, []); 
 
+  // Cleanup function for audio file only
   const cleanupAudioFile = useCallback(() => {
     fs.promises.unlink(AUDIO_FILE_PATH)
       .then(() => console.log("Cleaned up audio file."))
@@ -306,7 +283,7 @@ export default function Command() {
 
   // Initialize and validate configuration
   useConfiguration(setState, setConfig, setErrorMessage);
-  
+
   // Effect to Start/Stop Recording
   useRecording(state, config, setState, setErrorMessage, soxProcessRef);
 
@@ -326,13 +303,13 @@ export default function Command() {
     };
   }, [state]);
 
-const saveTranscriptionToHistory = useCallback(async (text: string) => {
+  const saveTranscriptionToHistory = useCallback(async (text: string) => {
     // Don't save empty transcription
-    if (!text || text === "[BLANK_AUDIO]") return; 
+    if (!text || text === "[BLANK_AUDIO]") return;
 
     try {
       const newItem: TranscriptionHistoryItem = {
-        id: crypto.randomUUID(), 
+        id: crypto.randomUUID(),
         timestamp: Date.now(),
         text: text,
       };
@@ -340,11 +317,10 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
       const existingHistoryString = await LocalStorage.getItem<string>(HISTORY_STORAGE_KEY);
       let history: TranscriptionHistoryItem[] = [];
 
-      //
       if (existingHistoryString) {
         try {
           history = JSON.parse(existingHistoryString);
-          if (!Array.isArray(history)) { 
+          if (!Array.isArray(history)) {
              console.warn("Invalid history data found in LocalStorage, resetting.");
              history = [];
           }
@@ -373,49 +349,22 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
     }
   }, []);
 
-  
-  const handleTranscriptionComplete = useCallback(async (text: string) => {
-    let finalText = text;
-
-    // Apply AI refinement if enabled and text is not empty
-    if (preferences.aiRefinementMethod !== "disabled" && text && text !== "[BLANK_AUDIO]") {
-      try {
-        finalText = await refineText(text);
-      } catch (error) {
-        console.error("AI refinement error:", error);
-        finalText = text; // Use original text on error
-      }
-    } else {
-      console.log("AI refinement skipped.");
-    }
-
-    setTranscribedText(finalText);
-    await saveTranscriptionToHistory(finalText);
-    setState("done"); 
-
-    if (DEFAULT_ACTION === "paste") {
-      await Clipboard.paste(finalText);
-      await showHUD("Pasted transcribed text");
-      cleanupAudioFile();
-      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-    } else if (DEFAULT_ACTION === "copy") {
-      await Clipboard.copy(finalText);
-      await showHUD("Copied to clipboard");
-      cleanupAudioFile(); 
-      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-    } else {
-      // Action is "none", stay in "done" state
-      if (preferences.aiRefinementMethod === "disabled" || !aiErrorMessage) {
-         await showToast({ style: Toast.Style.Success, title: "Transcription complete" });
-      }
-      // Clean up file when staying in 'done' state
-      cleanupAudioFile();
-    }
-  }, [DEFAULT_ACTION, cleanupAudioFile, preferences.aiRefinementMethod, saveTranscriptionToHistory, aiErrorMessage, refineText, setTranscribedText, setState]);
+  // Use transcription hook
+  const { startTranscription } = useTranscription({
+    config,
+    preferences,
+    setState,
+    setErrorMessage,
+    setTranscribedText,
+    refineText,
+    saveTranscriptionToHistory,
+    cleanupAudioFile,
+    aiErrorMessage, // Pass AI error message to decide on toast
+  });
 
 
+  // Function to stop recording and transcribe via hook
   const stopRecordingAndTranscribe = useCallback(async () => {
-    // Use the current state value directly from the hook
     console.log(`stopRecordingAndTranscribe called. Current state: ${state}`);
 
     if (state !== "recording") {
@@ -423,141 +372,46 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
       return;
     }
 
-    if (!config) {
-      console.error("stopRecordingAndTranscribe: Configuration not available.");
-      setErrorMessage("Configuration error occurred before transcription.");
-      setState("error");
-      return;
-    }
-
-    // Capture current process reference 
+    // Get current process ref before maybe clearing it
     const processToStop = soxProcessRef.current;
 
     if (processToStop) {
       console.log(`Attempting to stop recording process PID: ${processToStop.pid}...`);
-      soxProcessRef.current = null;
+      soxProcessRef.current = null; // Clear ref immediately
       console.log("Cleared sox process ref.");
       try {
          if (!processToStop.killed) {
-             process.kill(processToStop.pid!, "SIGTERM"); 
+             // Send SIGTERM first for graceful shutdown
+             process.kill(processToStop.pid!, "SIGTERM");
              console.log(`Sent SIGTERM to PID ${processToStop.pid}`);
+             // Give it time to die gracefully before transcription starts
+             await new Promise(resolve => setTimeout(resolve, 100));
          } else {
             console.log(`Process ${processToStop.pid} was already killed.`);
          }
       } catch (e) {
-        // Handle potential errors (like process already exited )
+        // Handle potential errors (like process already exited - ESRCH)
         if (e instanceof Error && 'code' in e && e.code !== 'ESRCH') {
            console.warn(`Error stopping sox process PID ${processToStop.pid}:`, e);
         } else {
            console.log(`Process ${processToStop.pid} likely already exited.`);
         }
       }
-  } else {
+    } else {
        console.warn("stopRecordingAndTranscribe: No active sox process reference found to stop. State might be inconsistent.");
-  }
-
-    // Move to transcribing state
-    setState("transcribing");
-    showToast({ style: Toast.Style.Animated, title: "Transcribing..." });
-    console.log("Set state to transcribing.");
-
-    //delay to ensure audio file written
-    await new Promise(resolve => setTimeout(resolve, 300)); 
-
-    console.log(`Checking for audio file: ${AUDIO_FILE_PATH}`);
-
-    try {
-      const stats = await fs.promises.stat(AUDIO_FILE_PATH);
-      console.log(`Audio file stats: ${JSON.stringify(stats)}`);
-      // Check if file exists and has expected size 
-      if (stats.size <= 44) {
-        throw new Error(`Audio file is empty or too small (size: ${stats.size} bytes). Recording might have failed or captured no sound.`);
-      }
-      console.log(`Audio file exists and has size ${stats.size}. Proceeding with transcription.`);
-    } catch (fileError: any) {
-      console.error(`Audio file check failed: ${AUDIO_FILE_PATH}`, fileError);
-      const errorMsg = fileError.code === 'ENOENT'
-        ? `Transcription failed: Audio file not found. Recording might have failed.`
-        : `Transcription failed: Cannot access audio file. ${fileError.message}`;
-      setErrorMessage(errorMsg);
-      setState("error");
-      cleanupSoxProcess(); 
-      cleanupAudioFile();
-      return;
     }
 
-    console.log(`Starting transcription with model: ${config.modelPath}`);
+    // Trigger transcription using hooks function
+    await startTranscription();
 
-    // Execute whisper-cli
-    exec(
-      `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps`,
-      async (error, stdout, stderr) => {
-        // Always clean up audio file after exec finishes
-        cleanupSoxProcess();
+  }, [state, startTranscription]); 
 
-        if (error) {
-          console.error("whisper exec error:", error);
-          console.error("whisper stderr:", stderr);
-
-          let title = "Transcription Failed";
-          let errMsg = `An unknown error occurred during transcription.`;
-
-          const stderrStr = stderr?.toString() || "";
-          const errorMsgStr = error?.message || "";
-
-          if (stderrStr.includes("invalid model") || stderrStr.includes("failed to load model")) {
-            title = "Model Error";
-            errMsg = `The model file at '${config.modelPath}' is invalid, incompatible, or failed to load. Please check the model file, if it's compatible with whisper.cpp (ggml) or select a different one in preferences.`;
-          } else if (stderrStr.includes("No such file or directory") || errorMsgStr.includes("ENOENT")) {
-             // This could be the executable or the model path specified in prefs
-             if (errorMsgStr.includes(config.execPath)) {
-                 title = "Whisper Executable Not Found";
-                 errMsg = `The whisper executable was not found at '${config.execPath}'. Please verify the path in preferences.`;
-             } else if (stderrStr.includes(config.modelPath) || errorMsgStr.includes(config.modelPath)) {
-                 title = "Model File Not Found";
-                 errMsg = `The model file specified at '${config.modelPath}' was not found. Please check the path in preferences or download the model using the Download whisper model command.`;
-             } else {
-                 title = "File Not Found";
-                 errMsg = `A required file or directory was not found. Double check your whisper-cli and model path. ${stderrStr}`;
-             }
-          } else if (stderrStr) {
-             // Prefer stderr message
-             errMsg = `Transcription failed. Details: ${stderrStr}`;
-          } else {
-             // Fallback to generic error message
-             errMsg = `Transcription failed: ${error.message}`;
-          }
-
-          setErrorMessage(errMsg); // Update state 
-          setState("error");
-
-          // Show failure toast
-          await showFailureToast(errMsg, {
-            title: title,
-            primaryAction: {
-              title: "Open Extension Preferences",
-              onAction: () => openExtensionPreferences(),
-            },
-
-          });
-
-        } else {
-          console.log("Transcription successful.");
-          const trimmedText = stdout.trim() || "[BLANK_AUDIO]";
-          console.log("Transcribed text:", trimmedText);
-
-          // Pass text to handler to set state/save to history etc
-          await handleTranscriptionComplete(trimmedText);
-        }
-      }
-    );
-  }, [state, config, cleanupSoxProcess, saveTranscriptionToHistory, handleTranscriptionComplete]);
 
   const generateWaveformMarkdown = useCallback(() => {
     const waveformHeight = 18;
     const waveformWidth = 105;
     let waveform = "```\n"; // Start md code block
-    waveform += "RECORDING AUDIO... PRESS ENTER TO STOP\n\n"; 
+    waveform += "RECORDING AUDIO... PRESS ENTER TO STOP\n\n";
 
     for (let y = 0; y < waveformHeight; y++) {
       let line = "";
@@ -589,8 +443,6 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
     return waveform;
   }, [waveformSeed]);
 
-  
-
 
   const getActionPanel = useCallback(() => {
     switch (state) {
@@ -620,7 +472,11 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
                  soxProcessRef.current = null;
                }
                cleanupAudioFile();
-               setState("idle"); // Go back to idle to trigger recording start via useRecording hook
+               // Reset state before going idle to allow re-recording
+               setErrorMessage("");
+               setAiErrorMessage("");
+               setTranscribedText("");
+               setState("idle");
             }}/>
           </ActionPanel>
         );
@@ -638,12 +494,15 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
               shortcut={{ modifiers: ["cmd"], key: "enter" }}
               onCopy={() => closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })} // Close after copy
             />
+             <Action title="View History" icon={Icon.List} shortcut={{ modifiers: ["cmd"], key: "h" }} onAction={async () => {
+                await launchCommand({ name: "history", type: LaunchType.UserInitiated });
+             }}/>
             <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
           </ActionPanel>
         );
       case "transcribing":
         // No actions available during transcription
-         return null; 
+         return null;
       case "error":
          return (
            <ActionPanel>
@@ -671,7 +530,7 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
            </ActionPanel>
         );
     }
-  }, [state, stopRecordingAndTranscribe, transcribedText, cleanupSoxProcess, DEFAULT_ACTION]);
+  }, [state, stopRecordingAndTranscribe, transcribedText, cleanupAudioFile, DEFAULT_ACTION]); 
 
   if (state === "configuring") {
     // while checking config, show loading
@@ -703,7 +562,7 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
       {state === "error" && (
            <Form.Description title="Error" text={errorMessage} />
       )}
-       {(state === "done" || state === "transcribing" || state === 'idle') && ( 
+       {(state === "done" || state === "transcribing" || state === 'idle') && (
           <Form.TextArea
             id="dictatedText"
             title={state === 'done' ? "Dictated Text" : ""} // Hide title unless done
@@ -713,16 +572,16 @@ const saveTranscriptionToHistory = useCallback(async (text: string) => {
                 "Waiting to start..." // idle state text
             }
             value={state === 'done' ? transcribedText : ""} // Only show text when done
-            onChange={setTranscribedText} 
+            onChange={setTranscribedText}
           />
        )}
        {state === 'transcribing' && (
            <Form.Description text="Processing audio, please wait..." />
        )}
-       {state === 'done' && aiErrorMessage && (
-           <Form.Description 
-             title="AI Refinement Error" 
-             text={aiErrorMessage} 
+              {state === 'done' && aiErrorMessage && (
+           <Form.Description
+             title="AI Refinement Error"
+             text={aiErrorMessage}
            />
        )}
     </Form>
