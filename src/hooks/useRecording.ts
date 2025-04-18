@@ -23,6 +23,12 @@ export function useRecording(
 ) {
   // Track whether we've already started recording in this session
   const hasStartedRef = useRef(false);
+  // Ref to hold latest state for event handlers (avoid stale closures and TS narrowing)
+  const stateRef = useRef<CommandState>(state);
+  // Update stateRef when state changes
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // Effect to start recording when state becomes idle
   useEffect(() => {
@@ -83,7 +89,7 @@ export function useRecording(
             soxProcessRef.current = null;
             console.log("useRecording: Cleared sox process ref due to close event.");
             // If process closed while we were supposed to be recording, error out
-            if (isMounted && state === "recording" && signal !== 'SIGTERM' && code !== 0) {
+            if (isMounted && stateRef.current === "recording" && signal !== 'SIGTERM' && code !== 0) {
               console.warn(`useRecording: SoX process closed unexpectedly (code: ${code}, signal: ${signal}).`);
               setErrorMessage(`Recording process stopped unexpectedly.`);
               setState("error");
