@@ -15,7 +15,6 @@ import {
   showHUD,
   openExtensionPreferences,
   PopToRootType,
-  AI,
 } from "@raycast/api";
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ChildProcessWithoutNullStreams } from "child_process";
@@ -26,6 +25,7 @@ import crypto from "crypto";
 import { useConfiguration } from "./hooks/useConfiguration";
 import { useRecording } from "./hooks/useRecording";
 import { useTranscription } from "./hooks/useTranscription";
+import { useAIRefinement } from "./hooks/useAIRefinement"; 
 
 interface Preferences {
   whisperExecutable: string;
@@ -45,13 +45,9 @@ interface TranscriptionHistoryItem {
   text: string;
 }
 
-
 // Paths
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav");
 const HISTORY_STORAGE_KEY = "dictationHistory";
-const AI_PROMPTS_KEY = "aiPrompts";
-const ACTIVE_PROMPT_ID_KEY = "activePromptId";
-
 
 // Define states
 type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
@@ -73,209 +69,17 @@ export default function Command() {
   const preferences = getPreferenceValues<Preferences>();
   const DEFAULT_ACTION = preferences.defaultAction || "none";
 
-  // Function to refine text using Raycast AI
-  async function refineWithRaycastAI(text: string, modelId: string): Promise<string> {
-    try {
-      // Get active prompt
-      const activePromptId = await LocalStorage.getItem<string>(ACTIVE_PROMPT_ID_KEY) || "default";
-      const promptsJson = await LocalStorage.getItem<string>(AI_PROMPTS_KEY);
-
-      let prompts = [];
-      if (promptsJson) {
-        prompts = JSON.parse(promptsJson);
-      } else {
-        // Default prompt if none configured
-        prompts = [
-          {
-            id: "default",
-            name: "Email Format",
-            prompt: "Reformat this dictation as a professional email. Do not include a subject line. Keep all facts and information from the original text. Add appropriate greeting and signature if needed.",
-            isDefault: true,
-          }
-        ];
-      }
-
-      // Find the active prompt
-      const activePrompt = prompts.find((p: any) => p.id === activePromptId) || prompts[0];
-
-      // Use AI to refine text
-      const refined = await AI.ask(`${activePrompt.prompt}\n\nText to refine: "${text}"`, {
-        model: AI.Model[modelId as keyof typeof AI.Model] || AI.Model["OpenAI_GPT4o-mini"],
-        creativity: "medium",
-      });
-
-      return refined.trim();
-    } catch (error) {
-      console.error("Raycast AI refinement failed:", error);
-      const errorMessage = error instanceof Error ?
-        `Raycast AI refinement failed: ${error.message}` :
-        "Raycast AI refinement failed: Unknown error";
-      setAiErrorMessage(errorMessage); 
-      throw error; // Re-throw to be caught by caller
-    }
-  }
-
-  async function refineWithOllama(text: string, endpoint: string, model: string): Promise<string> {
-    try {
-      // Get active prompt
-      const activePromptId = await LocalStorage.getItem<string>(ACTIVE_PROMPT_ID_KEY) || "default";
-      const promptsJson = await LocalStorage.getItem<string>(AI_PROMPTS_KEY);
-
-      let prompts = [];
-      if (promptsJson) {
-        prompts = JSON.parse(promptsJson);
-      } else {
-        // Default prompt if none configured
-        prompts = [
-          {
-            id: "default",
-            name: "Email Format",
-            prompt: "Reformat this dictation as a professional email. Do not include a subject line. Keep all facts and information from the original text. Add appropriate greeting and signature if needed.",
-            isDefault: true,
-          }
-        ];
-      }
-
-      // Find the active prompt
-      const activePrompt = prompts.find((p: any) => p.id === activePromptId) || prompts[0];
-
-      // Remove slash frome endpoint if present
-      const baseEndpoint = endpoint.endsWith("/") ? endpoint.slice(0, -1) : endpoint;
-      const ollamaUrl = `${baseEndpoint}/v1/chat/completions`;
-
-      console.log(`Calling Ollama endpoint: ${ollamaUrl} with model: ${model}`);
-
-      // Get preferences to check for API key
-      const preferences = getPreferenceValues<Preferences>();
-
-      // Setup headers
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-
-      // Add API key if it exists
-      if (preferences.ollamaApiKey) {
-        headers["Authorization"] = `Bearer ${preferences.ollamaApiKey}`;
-      }
-
-      // Fetch to call Ollama API
-      const response = await fetch(ollamaUrl, {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify({
-          model: model,
-          messages: [
-            { "role": "system", "content": activePrompt.prompt },
-            { "role": "user", "content": text }
-          ],
-          stream: false
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Ollama API error (${response.status}): ${errorText}`);
-        const errorMessage = `Ollama API error (${response.status}): ${errorText}`;
-        setAiErrorMessage(errorMessage); // Set AI error message state
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-
-      // Extract content from response
-      if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
-        return data.choices[0].message.content.trim();
-      } else {
-        console.error("Unexpected Ollama response structure:", data);
-        const errorMessage = "Unexpected response structure from Ollama API.";
-        setAiErrorMessage(errorMessage); 
-        throw new Error("Failed to parse response from Ollama.");
-      }
-
-    } catch (error) {
-      console.error("Ollama refinement failed:", error);
-
-      let errorMessage = error instanceof Error ? error.message : "Unknown error";
-
-      // Check for connection errors
-      if (error instanceof TypeError && error.message.includes("fetch")) {
-         errorMessage = `Could not connect to the Ollama server at ${endpoint}. Please ensure it's running and accessible.`;
-      }
-
-      // Check for authentication errors
-      if (error instanceof Error && typeof error.message === "string") {
-        if (error.message.includes("401")) {
-          errorMessage = "Invalid API key or authentication error with the Ollama server.";
-        } else if (error.message.includes("403")) {
-          errorMessage = "Your API key doesn't have permission to access this resource.";
-        }
-      }
-
-      setAiErrorMessage(`Ollama refinement failed: ${errorMessage}`);
-      throw error; // Re-throw to be caught by caller
-    }
-  }
-
-  // Handles text refinement based on selected method
-  const refineText = useCallback(async (text: string): Promise<string> => {
-    const preferences = getPreferenceValues<Preferences>();
-
-    if (preferences.aiRefinementMethod === "disabled") {
-      return text;
-    }
-
-    const toast = await showToast({
-      style: Toast.Style.Animated,
-      title: "Refining with AI...",
-    });
-
-    try {
-      // Clear previous AI errors
-      setAiErrorMessage("");
-
-      let refinedText: string;
-
-      if (preferences.aiRefinementMethod === "raycast") {
-        // Check for Raycast AI access
-        if (!environment.canAccess("AI")) {
-          const msg = "Raycast Pro subscription required for AI features.";
-          setAiErrorMessage(msg); // Set error state
-          toast.style = Toast.Style.Failure;
-          toast.title = "Raycast AI Not Available";
-          toast.message = msg;
-          return text; // Return original text
-        }
-
-        refinedText = await refineWithRaycastAI(text, preferences.aiModel);
-      } else {
-        // Use Ollama
-        refinedText = await refineWithOllama(
-          text,
-          preferences.ollamaEndpoint,
-          preferences.ollamaModel
-        );
-      }
-
-      toast.style = Toast.Style.Success;
-      toast.title = "AI Refinement Complete";
-      return refinedText;
-
-    } catch (error) {
-            console.error("AI refinement failed in refineText:", error);
-      toast.style = Toast.Style.Failure;
-      toast.title = "AI Refinement Failed";
-      
-      return text; // Return original text on error
-    }
-  }, [preferences.aiRefinementMethod, preferences.aiModel, preferences.ollamaEndpoint, preferences.ollamaModel]); // Dependencies
-
+  // Get refineText function from hook 
+  const { refineText } = useAIRefinement(setAiErrorMessage);
 
   // Cleanup function for audio file only
   const cleanupAudioFile = useCallback(() => {
-    fs.promises.unlink(AUDIO_FILE_PATH)
+    fs.promises
+      .unlink(AUDIO_FILE_PATH)
       .then(() => console.log("Cleaned up audio file."))
       .catch((err) => {
-          if (err.code !== 'ENOENT') { // Ignore if file doesn't exist
+        if (err.code !== "ENOENT") {
+          // Ignore if file doesn't exist
              console.error("Error cleaning up audio file:", err.message);
           }
       });
@@ -284,15 +88,15 @@ export default function Command() {
   // Initialize and validate configuration
   useConfiguration(setState, setConfig, setErrorMessage);
 
-  // Effect to Start/Stop Recording
-  useRecording(state, config, setState, setErrorMessage, soxProcessRef);
+  const { restartRecording } = useRecording(state, config, setState, setErrorMessage, soxProcessRef);
+
 
   // Effect for waveform animation
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
     if (state === "recording") {
       intervalId = setInterval(() => {
-        setWaveformSeed(prev => prev + 1);
+        setWaveformSeed((prev) => prev + 1);
       }, 150);
     }
     // Cleanup interval on unmount or when state changes
@@ -326,7 +130,11 @@ export default function Command() {
           }
         } catch (parseError) {
           console.error("Failed to parse history from LocalStorage:", parseError);
-          await showToast({ style: Toast.Style.Failure, title: "Warning", message: "Could not read previous dictation history. Clearing history." });
+          await showToast({
+            style: Toast.Style.Failure,
+            title: "Warning",
+            message: "Could not read previous dictation history. Clearing history.",
+          });
           history = []; // Reset history if parse fails
         }
       }
@@ -342,10 +150,13 @@ export default function Command() {
 
       await LocalStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
       console.log("Saved transcription to history.");
-
     } catch (error) {
       console.error("Failed to save transcription to history:", error);
-       await showToast({ style: Toast.Style.Failure, title: "Error", message: "Failed to save transcription to history." });
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Error",
+        message: "Failed to save transcription to history.",
+      });
     }
   }, []);
 
@@ -359,9 +170,8 @@ export default function Command() {
     refineText,
     saveTranscriptionToHistory,
     cleanupAudioFile,
-    aiErrorMessage, // Pass AI error message to decide on toast
+    aiErrorMessage, 
   });
-
 
   // Function to stop recording and transcribe via hook
   const stopRecordingAndTranscribe = useCallback(async () => {
@@ -385,27 +195,25 @@ export default function Command() {
              process.kill(processToStop.pid!, "SIGTERM");
              console.log(`Sent SIGTERM to PID ${processToStop.pid}`);
              // Give it time to die gracefully before transcription starts
-             await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
          } else {
             console.log(`Process ${processToStop.pid} was already killed.`);
          }
       } catch (e) {
         // Handle potential errors (like process already exited - ESRCH)
-        if (e instanceof Error && 'code' in e && e.code !== 'ESRCH') {
+        if (e instanceof Error && "code" in e && e.code !== "ESRCH") {
            console.warn(`Error stopping sox process PID ${processToStop.pid}:`, e);
         } else {
            console.log(`Process ${processToStop.pid} likely already exited.`);
         }
       }
     } else {
-       console.warn("stopRecordingAndTranscribe: No active sox process reference found to stop. State might be inconsistent.");
+       console.warn("stopRecordingAndTranscribe: No active sox process reference found to stop.");
     }
 
     // Trigger transcription using hooks function
     await startTranscription();
-
   }, [state, startTranscription]); 
-
 
   const generateWaveformMarkdown = useCallback(() => {
     const waveformHeight = 18;
@@ -443,41 +251,41 @@ export default function Command() {
     return waveform;
   }, [waveformSeed]);
 
-
   const getActionPanel = useCallback(() => {
     switch (state) {
       case "recording":
         return (
           <ActionPanel>
             <Action title="Stop and Transcribe" icon={Icon.Stop} onAction={stopRecordingAndTranscribe} />
-            <Action title="Cancel Recording" icon={Icon.XMarkCircle} shortcut={{ modifiers: ["cmd"], key: "." }} onAction={() => {
+            <Action
+              title="Cancel Recording"
+              icon={Icon.XMarkCircle}
+              shortcut={{ modifiers: ["cmd"], key: "." }}
+              onAction={() => {
                const processToStop = soxProcessRef.current;
                if (processToStop && !processToStop.killed) {
                  try {
                    process.kill(processToStop.pid!, "SIGKILL"); // Immediate stop
                    console.log(`Cancel Recording: Sent SIGKILL to PID ${processToStop.pid}`);
-                 } catch (e) { /* Ignore ESRCH */ }
+                  } catch (e) {
+                    /* Ignore ESRCH */
+                  }
                  soxProcessRef.current = null;
                }
-               cleanupAudioFile(); // Clean up potentially partial file
+               cleanupAudioFile(); // Clean up partial file
                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-           }}/>
-            <Action title="Retry Recording" icon={Icon.ArrowClockwise} shortcut={{ modifiers: ["cmd"], key: "r" }} onAction={() => {
-               const processToStop = soxProcessRef.current;
-               if (processToStop && !processToStop.killed) {
-                 try {
-                   process.kill(processToStop.pid!, "SIGKILL");
-                   console.log(`Retry Recording: Sent SIGKILL to PID ${processToStop.pid}`);
-                 } catch (e) { /* Ignore ESRCH */ }
-                 soxProcessRef.current = null;
-               }
-               cleanupAudioFile();
-               // Reset state before going idle to allow re-recording
-               setErrorMessage("");
-               setAiErrorMessage("");
-               setTranscribedText("");
-               setState("idle");
-            }}/>
+              }}
+            />
+            <Action
+              title="Retry Recording"
+              icon={Icon.ArrowClockwise}
+              shortcut={{ modifiers: ["cmd"], key: "r" }}
+              onAction={() => {
+                console.log("Retry Recording action triggered.");
+                cleanupAudioFile(); 
+                restartRecording(); 
+              }}
+            />
           </ActionPanel>
         );
       case "done":
@@ -486,17 +294,26 @@ export default function Command() {
             <Action.Paste
               title={DEFAULT_ACTION === "paste" ? "Paste Text (Default)" : "Paste Text"}
               content={transcribedText}
-              onPaste={() => closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })} // Close after paste
+              onPaste={() =>
+                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })
+              } // Close after paste
             />
             <Action.CopyToClipboard
               title={DEFAULT_ACTION === "copy" ? "Copy Text (Default)" : "Copy Text"}
               content={transcribedText}
               shortcut={{ modifiers: ["cmd"], key: "enter" }}
-              onCopy={() => closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })} // Close after copy
+              onCopy={() =>
+                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })
+              } // Close after copy
             />
-             <Action title="View History" icon={Icon.List} shortcut={{ modifiers: ["cmd"], key: "h" }} onAction={async () => {
-                await launchCommand({ name: "history", type: LaunchType.UserInitiated });
-             }}/>
+            <Action
+              title="View History"
+              icon={Icon.List}
+              shortcut={{ modifiers: ["cmd"], key: "h" }}
+              onAction={async () => {
+                await launchCommand({ name: "dictation-history", type: LaunchType.UserInitiated });
+              }}
+            />
             <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
           </ActionPanel>
         );
@@ -507,19 +324,29 @@ export default function Command() {
          return (
            <ActionPanel>
               {/* Allow to quickly open preferences if config error */}
-              <Action title="Open Extension Preferences"
+            <Action
+              title="Open Extension Preferences"
               icon={Icon.Gear}
                onAction={() => {
                 openExtensionPreferences();
                 closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-               }}/>
-              <Action title="Retry (Reopen Command)" icon={Icon.ArrowClockwise} onAction={() => {
+              }}
+            />
+            <Action
+              title="Retry (Reopen Command)"
+              icon={Icon.ArrowClockwise}
+              onAction={() => {
                   showHUD("Please reopen the Dictate Text command.");
                   closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-               }}/>
-               <Action title="Download Model" icon={Icon.Download} onAction={async () => {
+              }}
+            />
+            <Action
+              title="Download Model"
+              icon={Icon.Download}
+              onAction={async () => {
                   await launchCommand({ name: "download-model", type: LaunchType.UserInitiated });
-               }}/>
+              }}
+            />
               <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
            </ActionPanel>
          );
@@ -539,12 +366,7 @@ export default function Command() {
 
   if (state === "recording") {
     // Show waveform while recording
-    return (
-      <Detail
-        markdown={generateWaveformMarkdown()}
-        actions={getActionPanel()}
-      />
-    );
+    return <Detail markdown={generateWaveformMarkdown()} actions={getActionPanel()} />;
   }
 
   //Dictation UI

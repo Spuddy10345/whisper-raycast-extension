@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction, useCallback } from "react";
 import { showToast, Toast } from "@raycast/api";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import path from 'path';
@@ -13,6 +13,11 @@ interface Config {
   modelPath: string;
   soxPath: string;
 }
+
+interface UseRecordingResult {
+  restartRecording: () => void;
+}
+
 /**
  * Hook to manage audio recording for transcription with SoX.
  * @param config - Configuration object with paths to required executables and models
@@ -26,7 +31,7 @@ export function useRecording(
   setState: Dispatch<SetStateAction<CommandState>>,
   setErrorMessage: Dispatch<SetStateAction<string>>,
   soxProcessRef: MutableRefObject<ChildProcessWithoutNullStreams | null>
-) {
+): UseRecordingResult {
   // Track whether we've already started recording in this session
   const hasStartedRef = useRef(false);
   // Ref to hold latest state for event handlers (avoid stale closures and TS narrowing)
@@ -36,15 +41,44 @@ export function useRecording(
     stateRef.current = state;
   }, [state]);
 
+  // Function to restart recording via action
+const restartRecording = useCallback(() => {
+    console.log("useRecording: restartRecording called.");
+    const currentProcess = soxProcessRef.current;
+    if (currentProcess && !currentProcess.killed) {
+      console.log(`useRecording: Killing existing process PID: ${currentProcess.pid} for restart.`);
+      try {
+        process.kill(currentProcess.pid!, "SIGKILL"); // Force kill for quick restart
+        console.log(`useRecording: Sent SIGKILL to PID ${currentProcess.pid}`);
+      } catch (e) {
+         if (e instanceof Error && 'code' in e && e.code !== 'ESRCH') {
+           console.warn(`useRecording: Error sending SIGKILL during restart:`, e);
+         } else {
+           console.log(`useRecording: Process ${currentProcess.pid} likely already exited during restart.`);
+         }
+      }
+      soxProcessRef.current = null; // Clear ref
+    } else {
+       console.log("useRecording: No active process found to kill for restart.");
+    }
+
+    hasStartedRef.current = false; // Allow recording to start again
+    setErrorMessage(""); 
+    setState("idle"); 
+    console.log("useRecording: Set state to idle to trigger restart.");
+
+  }, [setState, setErrorMessage, soxProcessRef]);
+
+
   // Effect to start recording when state becomes idle
   useEffect(() => {
     // Only run effect when state is idle and hasn't started recording yet
     if (state !== "idle" || !config || hasStartedRef.current || soxProcessRef.current) {
-      return;
-    }
+      console.log(`useRecording effect skipped: state=${state}, config=${!!config}, hasStarted=${hasStartedRef.current}, processExists=${!!soxProcessRef.current}`);
+     return;
+   }
 
     let isMounted = true;
-    
     const startRecording = async () => {
       const audioDir = path.dirname(AUDIO_FILE_PATH);
       try {
@@ -118,7 +152,7 @@ export function useRecording(
     return () => {
       isMounted = false;
     };
-  }, [config]); 
+  }, [config, state, setState, setErrorMessage, soxProcessRef]); 
 
   // effect for component cleanup
   useEffect(() => {
@@ -139,5 +173,6 @@ export function useRecording(
         }
       }
     };
-  }, []); 
+  }, [soxProcessRef]); 
+  return { restartRecording }; 
 }
