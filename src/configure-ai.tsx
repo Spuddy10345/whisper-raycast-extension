@@ -64,9 +64,14 @@ export default function ConfigureAI() {
             prompt: "Rewrite this dictation in formal language suitable for professional documentation. Correct grammar and improve sentence structure while preserving all information.",
         },
         {
-            id: "casual",
-            name: "Casual Writing",
-            prompt: "Rewrite this dictation in a casual tone suitable for informal communication. Maintain the original message while making it more conversational.",
+            id: "command",
+            name: "Generate Shell Command",
+            prompt: "Return a zsh shell command based on the description provided within the prompt. The command should be precise, follow best practises. If using any non-default packages, assume the user has that package installed already. Use the best package for the job. Only provide the command, abosultely nothing else. ",
+        },
+        {
+            id: "fix",
+            name: "Fix transcription errors",
+            prompt: "Your job is to fix any spelling, grammar, and transcription mistakes in the transcription given to you along with this prompt. Whisper can sometimes mishear certain words so use your common sense to try and fix these errors. Do not add any information or add any questions, just return the fixed, coherent text.",
         },
     ]);
 

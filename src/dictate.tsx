@@ -109,7 +109,7 @@ export default function Command() {
 
   const saveTranscriptionToHistory = useCallback(async (text: string) => {
     // Don't save empty transcription
-    if (!text || text === "[BLANK_AUDIO]") return;
+    if (!text || text === "[BLANK_AUDIO]" || text === "[PAUSE]") return;
 
     try {
       const newItem: TranscriptionHistoryItem = {
