@@ -98,6 +98,7 @@ export default function ConfigureAI() {
     const handleSetActivePrompt = useCallback(
         (id: string) => {
             setActivePromptId(id);
+            console.log("Active prompt ID changed to:", id);
             showToast({
                 style: Toast.Style.Success,
                 title: "Active prompt updated",

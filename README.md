@@ -19,15 +19,18 @@
 <p align="center">
    <img src="assets/configure-ai.png" alt="Refine your transcribed text with custom prompts">
 </p>
+<p align="center">
+   <img src="assets/history.png" alt="View, copy and paste you dictation/refinement history">
+</p>
 
 Effortlessly convert your speech to text directly within Raycast using the power of [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp). This extension provides a simple interface to record audio, transcribe and refine it locally, privately on your machine. Refine the text with custom prompts privately using ollama, or additionally with Raycast AI or any v1 (OpenAI) compatible API.
 ## ✨ Features
 
 *   **Local Transcription:** Uses `whisper.cpp` running locally on your machine through Raycast.
 *   **Refine with AI** Optionally refine the transcribed text using Raycast AI or any OpenAI (v1) compatible API, such as Anthropic, OpenAI, a local Ollama server.
-    **Download Models** Download a variety of models from right within the extension.
+    **Download Models** Download a variety of whisper models from right within the extension.
     **Dictation History** Saves all transcriptions locally with timestamps which can be browsed, copied and pasted using the Dictation History command.
-*   **Simple Interface:** Start recording, press Enter to stop, copy or directly paste into your active window.
+*   **Simple Interface:** Start recording, press Enter to stop, copy or paste directly into your active window.
 *   **Configurable Output:** Choose to choose, or automatically paste/copy to clipboard. 
 
 ## 📚 Table of Contents
@@ -52,10 +55,10 @@ Before installing the extension, you need the following installed and configured
 
 1.  **Raycast:** You need the Raycast app installed.
 2.  **`whisper.cpp`:** You must install whisper-cpp. 
-    * The easiest way is to use homebrew: `brew install whisper-cpp`
+    * The easiest way is to use homebrew [Homebrew](https://brew.sh/): `brew install whisper-cpp`
     * If installed another way make sure to update the path to your whisper-cli executable iin the extension's preferences.
 3.  **Whisper Model File:** 
-    * Download a model using the `Download Whisper Model` extesnion command. This will configure the model's path automatically. 
+    * Download a model using the `Download Whisper Model` extension command. This will configure the model's path automatically. 
     * Alternatively, download a model yourself (`ggml-{model}.bin`) and point the extension to it's path in preferences.
 4.  **`sox`:** This extension uses the SoX (Sound eXchange) utility for audio recording.
     *   The easiest way to install it on macOS is with [Homebrew](https://brew.sh/): `brew install sox`
@@ -65,7 +68,7 @@ Before installing the extension, you need the following installed and configured
 
 ### 1. Prerequisites
 
-This installation assumes you have met all requirements posted above [Requirements](#-requirements). Have the full paths to your `whisper.cpp` executable and the downloaded model file ready. 
+This installation assumes you have met all requirements posted above [Requirements](#-requirements). Have the full paths to your `whisper.cpp` executable, and the downloaded model file ready if not downloading through the extension.
 
 ### 2. Install the Extension
 
@@ -82,16 +85,15 @@ Since this extension isn't on the Raycast Store (yet!), you'll install it from t
     ```
 3.  **Build the Extension:**
     ```bash
-    npm run build
+    npm run dev
     ```
-    Alternatively, for development: `npm run dev`
 4.  **Open Raycast Preferences:** Go to `Extensions` > `+` (Add Extension) > `Import Extension...`.
 5.  **Select Directory:** Navigate to and select the cloned `whisper-raycast-extension` directory.
 6.  **Configure:** Follow the steps in the [Configuration](#️-configuration) section below.
 
 ## ⚙️ Configuration
 
-After installing, you have to configure the extension preferences in Raycast, if you installed both SoX and whisper-cpp using homebrew, and download a model using the extension this should all be pre-configured for you, the extension will also confirm both SoX and whisper-cli path on first launch:
+After installing, you have to configure the extension preferences in Raycast, if you installed both SoX and whisper-cpp using homebrew, and download a model using the extension this should all be pre-configured for you, the extension will also confirm both SoX and whisper-cli path on first launch which will allow you to immediately start using simple dictation once configured:
 
 1.  Open Raycast Preferences (`⌘ + ,`).
 2.  Navigate to `Extensions`.
@@ -148,6 +150,7 @@ Automate the formatting/style of your transcriptions by refining them using AI. 
     *   **Ollama/v1:** Connects to a local Ollama instance running on your machine or a reachable server or any compatible API. You'll need to provide:
         *   **Endpoint:** The URL of your Ollama server or external API (e.g. `http://localhost:11434`, `https://api.openai.com`).
         *   **Model:** The name of the model you want to use (e.g., `llama3.2:latest`, `gpt-4o-latest`). If using Ollama, make sure this model is pulled and available: `ollama ls`.
+        * If applicable enter the API key for your chosen provider
 3.  **Configure Prompts (Optional):** Use the `Configure AI Refinement` command to manage how the AI refines your text.
 
 **Using the `Configure AI Refinement` Command:**
@@ -169,13 +172,16 @@ When AI refinement is enabled, after the initial transcription, the text will be
 
 The extension downloader currently supports the following whisper models, however you can download any model you might need from [ggervanov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp/tree/main) and configure it's path in the extension's preferences:
 
+* **Tiny, English Language** (`tiny.en`, 78 MB) - Smallest, speediest, least accurate however optimised for english language
 * **Base, English Language** (`base.en`, 148 MB) - Small and speedy, same size as `base` but more accurate if just transcribing in english
 * **Small, English Language** (`small.en`, 488MB) - Optimised for english, slightly larger and more accurate than base while not consuming too many resources
 * **Medium, English Language** (`medium.en`, 1.53 GB - Slightly larger again, optimised for english, transcriptions will be slower than above and consume more resources, but will be more accurate
+* **Tiny, Multilingual** (`tiny`, 78 MB) - Smallest, speediest, least accurate
 * **Base, Multilingual** (`base`, 148 MB) - Small, speedy and multilingual
 * **Small, Multilingual** (`small`, 488 MB) - Still pretty speedy and multilingual
 * **Medium, Multilingual** (`medium`, 1.53 GB) - Slower, more accurate and multilingual.
 * **Large, Multilingual** (`large-v3`, 3.1 GB) - The largest, slowest, most accurate model available. Use only if you have a powerful computer or a lot o time on your hands, especially for longer transcriptions.
+* **Turbo Multilingual** (`large-v3-turbo`, 1.62GB) - Based on the large model but much faster at the cost of accuracy. Has a chance to begin repeating itself on longer transcriptions.
 
 ## 🐛 Troubleshooting
 

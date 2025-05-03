@@ -291,13 +291,6 @@ export default function Command() {
       case "done":
         return (
           <ActionPanel>
-            <Action.Paste
-              title={DEFAULT_ACTION === "paste" ? "Paste Text (Default)" : "Paste Text"}
-              content={transcribedText}
-              onPaste={() =>
-                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })
-              } // Close after paste
-            />
             <Action.CopyToClipboard
               title={DEFAULT_ACTION === "copy" ? "Copy Text (Default)" : "Copy Text"}
               content={transcribedText}
@@ -305,6 +298,14 @@ export default function Command() {
               onCopy={() =>
                 closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })
               } // Close after copy
+            />
+            <Action.Paste
+              title={DEFAULT_ACTION === "paste" ? "Paste Text (Default)" : "Paste Text"}
+              content={transcribedText}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "enter" }}
+              onPaste={() =>
+                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })
+              } // Close after paste
             />
             <Action
               title="View History"
