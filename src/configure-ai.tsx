@@ -71,7 +71,12 @@ export default function ConfigureAI() {
         {
             id: "fix",
             name: "Fix transcription errors",
-            prompt: "Your job is to fix any spelling, grammar, and transcription mistakes in the transcription given to you along with this prompt. Whisper can sometimes mishear certain words so use your common sense to try and fix these errors. Do not add any information or add any questions, just return the fixed, coherent text.",
+            prompt: "Your ONLY job is to fix any spelling, grammar, and transcription mistakes in the transcription given to you along with this prompt. Whisper can sometimes mishear certain words so use your common sense to try and fix these errors. Do not add any information or add any questions, just return the fixed, coherent text. If the text to be fixed is a question do not answer the question, just fix any mistakes in the question itself.",
+        },
+        {
+            id: "table",
+            name: "Make Markdown Table",
+            prompt: "Create a markdown table from the information given. Provide only the table and absolutely nothing else. Do not include it withion a markdown code block (e.g.``` {table} ```) Add no additional commentary, just a clear, well formatted markdown table.",
         },
     ]);
 

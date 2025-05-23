@@ -15,7 +15,17 @@ interface AIPrompt {
   prompt: string;
 }
 
-type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
+// Define states 
+type CommandState =
+  | "configuring"
+  | "configured_waiting_selection" 
+  | "idle"
+  | "recording"
+  | "transcribing"
+  | "done"
+  | "error"
+  | "selectingPrompt"; 
+
 interface Config {
   execPath: string;
   modelPath: string;
@@ -28,6 +38,7 @@ interface Preferences {
   ollamaEndpoint: string;
   ollamaApiKey: string;
   ollamaModel: string;
+  promptBeforeDictation: boolean;
 }
 
 interface UseRecordingResult {

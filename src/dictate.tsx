@@ -15,6 +15,7 @@ import {
   showHUD,
   openExtensionPreferences,
   PopToRootType,
+  List,
 } from "@raycast/api";
 import { useCachedState } from "@raycast/utils";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -38,6 +39,7 @@ interface Preferences {
   ollamaEndpoint: string;
   ollamaApiKey: string;
   ollamaModel: string;
+  promptBeforeDictation: boolean;
 }
 
 interface TranscriptionHistoryItem {
@@ -58,7 +60,7 @@ interface AIPrompt {
 }
 
 // Define states
-type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
+type CommandState = "configuring" | "configured_waiting_selection" | "selectingPrompt" | "idle" | "recording" | "transcribing" | "done" | "error";
 interface Config {
   execPath: string;
   modelPath: string;
@@ -70,6 +72,7 @@ export default function Command() {
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [aiErrorMessage, setAiErrorMessage] = useState<string>("");
+  const [selectedSessionPrompt, setSelectedSessionPrompt] = useState<AIPrompt | null>(null);
   const soxProcessRef = useRef<ChildProcessWithoutNullStreams | null>(null);
   const [waveformSeed, setWaveformSeed] = useState<number>(0);
   const [config, setConfig] = useState<Config | null>(null);
@@ -105,6 +108,40 @@ export default function Command() {
     soxProcessRef
   );
 
+  // Handle prompt selection
+  const handlePromptSelection = useCallback(async (promptId: string) => {
+    const selectedPrompt = prompts.find(p => p.id === promptId);
+    if (selectedPrompt) {
+      setSelectedSessionPrompt(selectedPrompt);
+      // Set the selected prompt as active for this session
+      await LocalStorage.setItem("activePromptId", promptId);
+      setState("idle");
+    }
+  }, [prompts]);
+
+  // Handle prompt selection cancellation
+const handlePromptSelectionCancel = useCallback(() => {
+  setSelectedSessionPrompt(null);
+  setState("idle");
+
+  // Stop any ongoing dictation process
+  const processToStop = soxProcessRef.current;
+  if (processToStop && !processToStop.killed) {
+    try {
+      process.kill(processToStop.pid!, "SIGKILL"); // Immediate stop
+      console.log(`handlePromptSelectionCancel: Sent SIGKILL to PID ${processToStop.pid}`);
+    } catch (e) {
+      /* Ignore ESRCH */
+    }
+    soxProcessRef.current = null;
+  }
+
+  // Clean up audio file
+  cleanupAudioFile();
+
+  // Close the Raycast window
+  closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+}, [cleanupAudioFile]);
   // Effect for waveform animation
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -120,6 +157,26 @@ export default function Command() {
       }
     };
   }, [state]);
+
+  // Effect to handle prompt selection after configuration
+  useEffect(() => {
+    if (state === "configured_waiting_selection" && config) {
+      const shouldShowPromptSelection =
+        preferences.aiRefinementMethod !== "disabled" && preferences.promptBeforeDictation;
+
+      if (shouldShowPromptSelection) {
+        if (prompts.length === 0) {
+          setState("selectingPrompt");
+        } else if (prompts.length === 1) {
+          handlePromptSelection(prompts[0].id);
+        } else {
+          setState("selectingPrompt");
+        }
+      } else {
+        setState("idle");
+      }
+    }
+  }, [state, config, preferences.aiRefinementMethod, preferences.promptBeforeDictation, prompts, handlePromptSelection, setState]);
 
   const saveTranscriptionToHistory = useCallback(async (text: string) => {
     // Don't save empty transcription
@@ -173,6 +230,13 @@ export default function Command() {
       });
     }
   }, []);
+
+  // Effect to reset session prompt when AI refinement is disabled
+  useEffect(() => {
+    if (preferences.aiRefinementMethod === "disabled") {
+      setSelectedSessionPrompt(null);
+    }
+  }, [preferences.aiRefinementMethod]);
 
   // Use transcription hook
   const { startTranscription } = useTranscription({
@@ -379,6 +443,70 @@ export default function Command() {
     return <Detail isLoading={true} markdown={"Checking Whisper configuration..."} />;
   }
 
+  if (state === "selectingPrompt") {
+    return (
+      <List navigationTitle="Select AI Refinement Prompt" searchBarPlaceholder="Search prompts...">
+        {prompts.length === 0 ? (
+          <List.EmptyView
+            icon={{ source: Icon.Stars }}
+            title="No Prompts Available"
+            description="Configure AI refinement prompts first"
+            actions={
+              <ActionPanel>
+                <Action
+                  title="Configure AI"
+                  icon={Icon.Gear}
+                  onAction={async () => {
+                    await launchCommand({ name: "configure-ai", type: LaunchType.UserInitiated });
+                  }}
+                />
+                <Action
+                  title="Skip & Continue"
+                  icon={Icon.ArrowRight}
+                  onAction={handlePromptSelectionCancel}
+                />
+              </ActionPanel>
+            }
+          />
+        ) : (
+          <List.Section title={`Choose from ${prompts.length} available prompt${prompts.length > 1 ? 's' : ''}`}>
+            {prompts.map((prompt) => (
+              <List.Item
+                key={prompt.id}
+                icon={{ source: Icon.Stars }}
+                title={prompt.name}
+                subtitle={prompt.prompt.length > 80 ? `${prompt.prompt.substring(0, 80)}...` : prompt.prompt}
+                actions={
+                  <ActionPanel>
+                    <Action
+                      title="Select Prompt"
+                      icon={Icon.CheckCircle}
+                      onAction={() => handlePromptSelection(prompt.id)}
+                    />
+                    <Action
+                      title="Configure AI"
+                      icon={Icon.Gear}
+                      onAction={async () => {
+                        await launchCommand({ name: "configure-ai", type: LaunchType.UserInitiated });
+                      }}
+                      shortcut={{ modifiers: ["cmd"], key: "c" }}
+                    />
+                    <Action
+                      title="Cancel"
+                      icon={Icon.XMarkCircle}
+                      onAction={handlePromptSelectionCancel}
+                      shortcut={{ modifiers: ["cmd"], key: "." }}
+                    />
+                  </ActionPanel>
+                }
+              />
+            ))}
+          </List.Section>
+        )}
+      </List>
+    );
+  }
+
   if (state === "recording") {
     let refinementSection = "";
     
@@ -386,6 +514,8 @@ export default function Command() {
       const activePrompt = prompts.find(p => p.prompt === currentRefinementPrompt);
       const promptName = activePrompt?.name || "Unknown Prompt";
       refinementSection = `**AI Refinement: ${promptName}**\n\n`;
+    } else if (selectedSessionPrompt) {
+      refinementSection = `**AI Refinement: ${selectedSessionPrompt.name}**\n\n`;
     }
 
     const waveformWithRefinement = refinementSection + generateWaveformMarkdown();
