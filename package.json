@@ -107,6 +107,14 @@
       "default": "disabled"
     },
     {
+      "name": "promptBeforeDictation",
+      "type": "checkbox",
+      "required": false,
+      "title": "Choose AI prompt before each dictation",
+      "description": "When enabled, you'll be asked to select an AI refinement prompt before each dictation session (only when AI refinement is enabled)",
+      "default": false
+    },
+    {
       "name": "aiModel",
       "type": "dropdown",
       "required": false,
@@ -156,7 +164,7 @@
     }
   ],
   "dependencies": {
-    "@raycast/api": "1.95.0"
+    "@raycast/api": "latest"
   },
   "devDependencies": {
     "@raycast/utils": "^1.8.0",

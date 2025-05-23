@@ -6,7 +6,16 @@ import { showFailureToast } from "@raycast/utils";
 import { showToast, Toast, openExtensionPreferences, Clipboard, closeMainWindow, PopToRootType, showHUD, environment } from "@raycast/api";
 
 // Define states
-type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
+type CommandState =
+  | "configuring"
+  | "configured_waiting_selection" // Added new state
+  | "selectingPrompt"
+  | "idle"
+  | "recording"
+  | "transcribing"
+  | "done"
+  | "error";
+
 interface Config {
   execPath: string;
   modelPath: string;
@@ -22,6 +31,7 @@ interface Preferences {
   ollamaEndpoint: string;
   ollamaApiKey: string;
   ollamaModel: string;
+  promptBeforeDictation: boolean;
 }
 
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav");

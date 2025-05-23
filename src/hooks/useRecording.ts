@@ -15,7 +15,17 @@ interface AIPrompt {
   prompt: string;
 }
 
-type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
+// Define states - ensure this matches dictate.tsx
+type CommandState =
+  | "configuring"
+  | "configured_waiting_selection" // Added new state
+  | "idle"
+  | "recording"
+  | "transcribing"
+  | "done"
+  | "error"
+  | "selectingPrompt"; // Ensure all states from dictate.tsx are here
+
 interface Config {
   execPath: string;
   modelPath: string;
@@ -28,6 +38,7 @@ interface Preferences {
   ollamaEndpoint: string;
   ollamaApiKey: string;
   ollamaModel: string;
+  promptBeforeDictation: boolean;
 }
 
 interface UseRecordingResult {

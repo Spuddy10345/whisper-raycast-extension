@@ -1,13 +1,13 @@
 import { useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { getPreferenceValues, LocalStorage, openExtensionPreferences, launchCommand, LaunchType, closeMainWindow } from "@raycast/api";
-import { showFailureToast } from "@raycast/utils";
 import fs from "fs";
+import { showFailureToast } from "@raycast/utils"; // Added import
 
 const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
 
 //Define states
-type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
+type CommandState = "configuring" | "configured_waiting_selection" | "selectingPrompt" | "idle" | "recording" | "transcribing" | "done" | "error";
 
 interface Preferences {
   whisperExecutable: string;
@@ -107,7 +107,7 @@ export function useConfiguration(
       if (isMounted) {
         setConfig({ execPath: preferences.whisperExecutable, modelPath: finalModelPath, soxPath: preferences.soxExecutablePath });
         setErrorMessage("");
-        setState("idle");
+        setState("configured_waiting_selection");
       }
     }
 
