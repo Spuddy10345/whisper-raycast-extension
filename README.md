@@ -3,24 +3,24 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 <p align="center">
-  <img src="assets/extension-icon.png" alt="Extension Icon" width="200">
+  <img src="./media/extension-icon.png" alt="Extension Icon" width="200">
 </p>
 
 
 <p align="center">
-  <img src="assets/download-models.png" alt="Download and manage whisper models easily from within the extension">
+  <img src="media/download-models.png" alt="Download and manage whisper models easily from within the extension">
 </p>
 <p align="center">
-  <img src="assets/recording.png" alt="Record any length of audio to transcribe">
+  <img src="media/recording.png" alt="Record any length of audio to transcribe">
 </p>
 <p align="center">
-  <img src="assets/transcribed.png" alt="Modify your transcribed text before copying/pasting directly">
+  <img src="media/transcribed.png" alt="Modify your transcribed text before copying/pasting directly">
 </p>
 <p align="center">
-   <img src="assets/configure-ai.png" alt="Refine your transcribed text with custom prompts">
+   <img src="media/configure-ai.png" alt="Refine your transcribed text with custom prompts">
 </p>
 <p align="center">
-   <img src="assets/history.png" alt="View, copy and paste you dictation/refinement history">
+   <img src="media/history.png" alt="View, copy and paste you dictation/refinement history">
 </p>
 
 Effortlessly convert your speech to text directly within Raycast using the power of [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp). This extension provides a simple interface to record audio, transcribe and refine it locally, privately on your machine. Refine the text with custom prompts privately using ollama, or additionally with Raycast AI or any v1 (OpenAI) compatible API.

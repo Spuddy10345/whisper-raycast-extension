@@ -1,11 +1,19 @@
 import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction, useCallback } from "react";
-import { showToast, Toast } from "@raycast/api";
+import { showToast, Toast, getPreferenceValues, environment, LocalStorage } from "@raycast/api";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import path from 'path';
 import fs from 'fs';
-import { environment } from "@raycast/api";
+import { useCachedState } from "@raycast/utils";
 
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav");
+const AI_PROMPTS_KEY = "aiPrompts";
+const ACTIVE_PROMPT_ID_KEY = "activePromptId";
+
+interface AIPrompt {
+  id: string;
+  name: string;
+  prompt: string;
+}
 
 type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
 interface Config {
@@ -14,8 +22,18 @@ interface Config {
   soxPath: string;
 }
 
+interface Preferences {
+  aiRefinementMethod: "disabled" | "raycast" | "ollama";
+  aiModel: string;
+  ollamaEndpoint: string;
+  ollamaApiKey: string;
+  ollamaModel: string;
+}
+
 interface UseRecordingResult {
   restartRecording: () => void;
+  currentRefinementPrompt: string | null;
+  isRefinementActive: boolean;
 }
 
 /**
@@ -32,23 +50,30 @@ export function useRecording(
   setErrorMessage: Dispatch<SetStateAction<string>>,
   soxProcessRef: MutableRefObject<ChildProcessWithoutNullStreams | null>
 ): UseRecordingResult {
-  // Track whether we've already started recording in this session
   const hasStartedRef = useRef(false);
-  // Ref to hold latest state for event handlers (avoid stale closures and TS narrowing)
   const stateRef = useRef<CommandState>(state);
-  // Update stateRef when state changes
+  
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
-  // Function to restart recording via action
-const restartRecording = useCallback(() => {
+  const preferences = getPreferenceValues<Preferences>();
+  const [prompts] = useCachedState<AIPrompt[]>(AI_PROMPTS_KEY, []);
+  const [activePromptId] = useCachedState<string>(ACTIVE_PROMPT_ID_KEY, "");
+
+  const isRefinementActive = preferences.aiRefinementMethod !== "disabled";
+  
+  const currentRefinementPrompt = isRefinementActive && activePromptId
+    ? prompts.find(p => p.id === activePromptId)?.prompt || null
+    : null;
+
+  const restartRecording = useCallback(() => {
     console.log("useRecording: restartRecording called.");
     const currentProcess = soxProcessRef.current;
     if (currentProcess && !currentProcess.killed) {
       console.log(`useRecording: Killing existing process PID: ${currentProcess.pid} for restart.`);
       try {
-        process.kill(currentProcess.pid!, "SIGKILL"); // Force kill for quick restart
+        process.kill(currentProcess.pid!, "SIGKILL");
         console.log(`useRecording: Sent SIGKILL to PID ${currentProcess.pid}`);
       } catch (e) {
          if (e instanceof Error && 'code' in e && e.code !== 'ESRCH') {
@@ -57,22 +82,19 @@ const restartRecording = useCallback(() => {
            console.log(`useRecording: Process ${currentProcess.pid} likely already exited during restart.`);
          }
       }
-      soxProcessRef.current = null; // Clear ref
+      soxProcessRef.current = null;
     } else {
        console.log("useRecording: No active process found to kill for restart.");
     }
 
-    hasStartedRef.current = false; // Allow recording to start again
+    hasStartedRef.current = false;
     setErrorMessage(""); 
     setState("idle"); 
     console.log("useRecording: Set state to idle to trigger restart.");
 
   }, [setState, setErrorMessage, soxProcessRef]);
 
-
-  // Effect to start recording when state becomes idle
   useEffect(() => {
-    // Only run effect when state is idle and hasn't started recording yet
     if (state !== "idle" || !config || hasStartedRef.current || soxProcessRef.current) {
       console.log(`useRecording effect skipped: state=${state}, config=${!!config}, hasStarted=${hasStartedRef.current}, processExists=${!!soxProcessRef.current}`);
      return;
@@ -82,7 +104,6 @@ const restartRecording = useCallback(() => {
     const startRecording = async () => {
       const audioDir = path.dirname(AUDIO_FILE_PATH);
       try {
-        // Ensure directory exists
         await fs.promises.mkdir(audioDir, { recursive: true });
         if (!isMounted) return;
 
@@ -91,19 +112,18 @@ const restartRecording = useCallback(() => {
         showToast({ style: Toast.Style.Animated, title: "Recording...", message: "Press Enter to stop" });
 
         const args = [
-          "-d", // Default device
-          "-t", "wav", // Output WAV
-          "--channels", "1", // Mono
-          "--rate", "16000", // Sample rate for whisper
-          "--encoding", "signed-integer", // 16-bit PCM
+          "-d",
+          "-t", "wav",
+          "--channels", "1",
+          "--rate", "16000",
+          "--encoding", "signed-integer",
           "--bits", "16",
           AUDIO_FILE_PATH,
         ];
 
-        // Spawn the process
         const process = spawn(config.soxPath, args);
-        soxProcessRef.current = process; // Update the shared ref
-        hasStartedRef.current = true; // Mark recording as started
+        soxProcessRef.current = process;
+        hasStartedRef.current = true;
 
         console.log(`useRecording: Spawned sox process with PID: ${process.pid}`);
 
@@ -124,11 +144,9 @@ const restartRecording = useCallback(() => {
 
         process.on('close', (code, signal) => {
           console.log(`useRecording: sox process PID ${process.pid} closed. Code: ${code}, Signal: ${signal}`);
-          // Clear global ref only if still points to process that just closed
           if (soxProcessRef.current === process) {
             soxProcessRef.current = null;
             console.log("useRecording: Cleared sox process ref due to close event.");
-            // If process closed while we were supposed to be recording, error out
             if (isMounted && stateRef.current === "recording" && signal !== 'SIGTERM' && code !== 0) {
               console.warn(`useRecording: SoX process closed unexpectedly (code: ${code}, signal: ${signal}).`);
               setErrorMessage(`Recording process stopped unexpectedly.`);
@@ -146,7 +164,6 @@ const restartRecording = useCallback(() => {
       }
     };
 
-    // Attempt to start recording
     startRecording();
 
     return () => {
@@ -154,10 +171,8 @@ const restartRecording = useCallback(() => {
     };
   }, [config, state, setState, setErrorMessage, soxProcessRef]); 
 
-  // effect for component cleanup
   useEffect(() => {
     return () => {
-      // only runs when component unmounts
       console.log(`useRecording cleanup on unmount: PID: ${soxProcessRef.current?.pid}`);
       
       if (soxProcessRef.current && !soxProcessRef.current.killed) {
@@ -174,5 +189,10 @@ const restartRecording = useCallback(() => {
       }
     };
   }, [soxProcessRef]); 
-  return { restartRecording }; 
+
+  return { 
+    restartRecording,
+    currentRefinementPrompt,
+    isRefinementActive
+  }; 
 }

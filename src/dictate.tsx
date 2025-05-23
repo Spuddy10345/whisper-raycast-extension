@@ -16,6 +16,7 @@ import {
   openExtensionPreferences,
   PopToRootType,
 } from "@raycast/api";
+import { useCachedState } from "@raycast/utils";
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ChildProcessWithoutNullStreams } from "child_process";
 import path from 'path';
@@ -49,6 +50,13 @@ interface TranscriptionHistoryItem {
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav");
 const HISTORY_STORAGE_KEY = "dictationHistory";
 
+const AI_PROMPTS_KEY = "aiPrompts";
+interface AIPrompt {
+  id: string;
+  name: string;
+  prompt: string;
+}
+
 // Define states
 type CommandState = "configuring" | "idle" | "recording" | "transcribing" | "done" | "error";
 interface Config {
@@ -68,6 +76,7 @@ export default function Command() {
 
   const preferences = getPreferenceValues<Preferences>();
   const DEFAULT_ACTION = preferences.defaultAction || "none";
+  const [prompts] = useCachedState<AIPrompt[]>(AI_PROMPTS_KEY, []);
 
   // Get refineText function from hook 
   const { refineText } = useAIRefinement(setAiErrorMessage);
@@ -88,8 +97,13 @@ export default function Command() {
   // Initialize and validate configuration
   useConfiguration(setState, setConfig, setErrorMessage);
 
-  const { restartRecording } = useRecording(state, config, setState, setErrorMessage, soxProcessRef);
-
+  const { restartRecording, currentRefinementPrompt, isRefinementActive } = useRecording(
+    state,
+    config,
+    setState,
+    setErrorMessage,
+    soxProcessRef
+  );
 
   // Effect for waveform animation
   useEffect(() => {
@@ -366,8 +380,17 @@ export default function Command() {
   }
 
   if (state === "recording") {
-    // Show waveform while recording
-    return <Detail markdown={generateWaveformMarkdown()} actions={getActionPanel()} />;
+    let refinementSection = "";
+    
+    if (isRefinementActive && currentRefinementPrompt) {
+      const activePrompt = prompts.find(p => p.prompt === currentRefinementPrompt);
+      const promptName = activePrompt?.name || "Unknown Prompt";
+      refinementSection = `**AI Refinement: ${promptName}**\n\n`;
+    }
+
+    const waveformWithRefinement = refinementSection + generateWaveformMarkdown();
+    
+    return <Detail markdown={waveformWithRefinement} actions={getActionPanel()} />;
   }
 
   //Dictation UI
