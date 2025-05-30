@@ -142,6 +142,37 @@ const handlePromptSelectionCancel = useCallback(() => {
   // Close the Raycast window
   closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
 }, [cleanupAudioFile]);
+
+  // Handle skipping prompt selection, will use currently active prompt or first prompt 
+  const handleSkipAndUseActivePrompt = useCallback(async () => {
+    try {
+      // Get active prompt ID from LocalStorage
+      const activePromptId = (await LocalStorage.getItem<string>("activePromptId")) || "default";
+      
+      // Find active prompt in the prompts list
+      const activePrompt = prompts.find(p => p.id === activePromptId);
+      
+      if (activePrompt) {
+        setSelectedSessionPrompt(activePrompt);
+        await LocalStorage.setItem("activePromptId", activePromptId);
+        setState("idle");
+      } else {
+        // Fallback to first prompt if active prompt not found
+        if (prompts.length > 0) {
+          setSelectedSessionPrompt(prompts[0]);
+          await LocalStorage.setItem("activePromptId", prompts[0].id);
+          setState("idle");
+        } else {
+          // No prompts available, won't use any prompt
+          setState("idle");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to get active prompt:", error);
+      // Fallback to proceed without prompt
+      setState("idle");
+    }
+  }, [prompts]);
   // Effect for waveform animation
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -461,6 +492,12 @@ const handlePromptSelectionCancel = useCallback(() => {
                   }}
                 />
                 <Action
+                  title="Skip & Use Active Prompt"
+                  icon={Icon.Forward}
+                  onAction={handleSkipAndUseActivePrompt}
+                  shortcut={{ modifiers: ["cmd"], key: "s" }}
+                />
+                <Action
                   title="Skip & Continue"
                   icon={Icon.ArrowRight}
                   onAction={handlePromptSelectionCancel}
@@ -482,6 +519,12 @@ const handlePromptSelectionCancel = useCallback(() => {
                       title="Select Prompt"
                       icon={Icon.CheckCircle}
                       onAction={() => handlePromptSelection(prompt.id)}
+                    />
+                    <Action
+                      title="Skip & Use Active Prompt"
+                      icon={Icon.Forward}
+                      onAction={handleSkipAndUseActivePrompt}
+                      shortcut={{ modifiers: ["cmd"], key: "s" }}
                     />
                     <Action
                       title="Configure AI"

@@ -109,6 +109,7 @@ After installing, you have to configure the extension preferences in Raycast, if
         *   `Paste Text`: Pastes the text into the active application.
         *   `Copy to Clipboard`: Copies the text to the clipboard.
         *   `None (Show Options)`: Shows the transcribed text in Raycast with manual Paste/Copy actions (Default).
+5. C
 
 ## 💡 Usage
 
