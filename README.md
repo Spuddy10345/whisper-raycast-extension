@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 <p align="center">
-  <img src="./media/extension-icon.png" alt="Extension Icon" width="200">
+  <img src="./assets/extension-icon.png" alt="Extension Icon" width="200">
 </p>
 
 
@@ -11,13 +11,16 @@
   <img src="media/download-models.png" alt="Download and manage whisper models easily from within the extension">
 </p>
 <p align="center">
+   <img src="media/configure-ai.png" alt="Refine your transcribed text with custom prompts">
+</p>
+<p align="center">
+   <img src="media/dictate-prompt-selection.png" alt="Choose your prompt before each transcription, or turn this off in preferences and use the selction in 'Configure AI Refinement' by default.">
+</p>
+<p align="center">
   <img src="media/recording.png" alt="Record any length of audio to transcribe">
 </p>
 <p align="center">
   <img src="media/transcribed.png" alt="Modify your transcribed text before copying/pasting directly">
-</p>
-<p align="center">
-   <img src="media/configure-ai.png" alt="Refine your transcribed text with custom prompts">
 </p>
 <p align="center">
    <img src="media/history.png" alt="View, copy and paste you dictation/refinement history">
@@ -55,7 +58,7 @@ Before installing the extension, you need the following installed and configured
 
 1.  **Raycast:** You need the Raycast app installed.
 2.  **`whisper.cpp`:** You must install whisper-cpp. 
-    * The easiest way is to use homebrew [Homebrew](https://brew.sh/): `brew install whisper-cpp`
+    * The easiest way is to use [Homebrew](https://brew.sh/): `brew install whisper-cpp`
     * If installed another way make sure to update the path to your whisper-cli executable iin the extension's preferences.
 3.  **Whisper Model File:** 
     * Download a model using the `Download Whisper Model` extension command. This will configure the model's path automatically. 
@@ -72,7 +75,7 @@ This installation assumes you have met all requirements posted above [Requiremen
 
 ### 2. Install the Extension
 
-Since this extension isn't on the Raycast Store (yet!), you'll install it from the source code:
+Since this extension isn't on the Raycast Store ,you'll need to install it from the source code:
 
 1.  **Clone the Repository:**
     ```bash
@@ -109,7 +112,7 @@ After installing, you have to configure the extension preferences in Raycast, if
         *   `Paste Text`: Pastes the text into the active application.
         *   `Copy to Clipboard`: Copies the text to the clipboard.
         *   `None (Show Options)`: Shows the transcribed text in Raycast with manual Paste/Copy actions (Default).
-5. C
+5. Configure other preferences such as wether to be asked which refinement prompt to use before each transcription, or use the prompt chosen in `Configure AI Refinement` by default.
 
 ## 💡 Usage
 
