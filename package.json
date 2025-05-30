@@ -1,13 +1,14 @@
 {
   "name": "whisper-dictation",
   "title": "Whisper Dictation",
-  "description": "Speech-to-text using whisper.cpp",
+  "description": "A powerful dictation tool that uses Whisper for speech-to-text transcription, with AI-powered refinement options.",
   "icon": "extension-icon.png",
   "author": "finjo",
   "categories": [
     "Productivity",
     "AI"
   ],
+  "screenshots": "screenshot.png",
   "license": "MIT",
   "commands": [
     {
