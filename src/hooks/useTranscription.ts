@@ -3,12 +3,21 @@ import { exec } from "child_process";
 import fs from "fs";
 import path from "path";
 import { showFailureToast } from "@raycast/utils";
-import { showToast, Toast, openExtensionPreferences, Clipboard, closeMainWindow, PopToRootType, showHUD, environment } from "@raycast/api";
+import {
+  showToast,
+  Toast,
+  openExtensionPreferences,
+  Clipboard,
+  closeMainWindow,
+  PopToRootType,
+  showHUD,
+  environment,
+} from "@raycast/api";
 
 // Define states
 type CommandState =
   | "configuring"
-  | "configured_waiting_selection" 
+  | "configured_waiting_selection"
   | "selectingPrompt"
   | "idle"
   | "recording"
@@ -45,7 +54,7 @@ interface UseTranscriptionProps {
   refineText: (text: string) => Promise<string>;
   saveTranscriptionToHistory: (text: string) => Promise<void>;
   cleanupAudioFile: () => void;
-  aiErrorMessage: string; 
+  aiErrorMessage: string;
 }
 /**
  * Hook that manages audio transcription using Whisper CLI.
@@ -71,50 +80,59 @@ export function useTranscription({
   cleanupAudioFile,
   aiErrorMessage,
 }: UseTranscriptionProps) {
+  const handleTranscriptionResult = useCallback(
+    async (rawText: string) => {
+      let finalText = rawText;
 
-  const handleTranscriptionResult = useCallback(async (rawText: string) => {
-    let finalText = rawText;
-
-    // Apply AI refinement if enabled and text is not empty
-    if (preferences.aiRefinementMethod !== "disabled" && rawText && rawText !== "[BLANK_AUDIO]") {
-      try {
-        finalText = await refineText(rawText);
-      } catch (error) {
-        console.error("AI refinement error during transcription handling:", error);
-        // Error is already set by refineText, just use original text
-        finalText = rawText;
+      // Apply AI refinement if enabled and text is not empty
+      if (preferences.aiRefinementMethod !== "disabled" && rawText && rawText !== "[BLANK_AUDIO]") {
+        try {
+          finalText = await refineText(rawText);
+        } catch (error) {
+          console.error("AI refinement error during transcription handling:", error);
+          // Error is already set by refineText, just use original text
+          finalText = rawText;
+        }
+      } else {
+        console.log("AI refinement skipped.");
       }
-    } else {
-      console.log("AI refinement skipped.");
-    }
 
-    setTranscribedText(finalText);
-    await saveTranscriptionToHistory(finalText);
-    setState("done");
+      setTranscribedText(finalText);
+      await saveTranscriptionToHistory(finalText);
+      setState("done");
 
-    const DEFAULT_ACTION = preferences.defaultAction || "none";
+      const DEFAULT_ACTION = preferences.defaultAction || "none";
 
-    if (DEFAULT_ACTION === "paste") {
-      await Clipboard.paste(finalText);
-      await showHUD("Pasted transcribed text");
-      cleanupAudioFile();
-      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-    } else if (DEFAULT_ACTION === "copy") {
-      await Clipboard.copy(finalText);
-      await showHUD("Copied to clipboard");
-      cleanupAudioFile();
-      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-    } else {
-      // Action is "none", stay in "done" state
-      // Show success toast only if AI didn't fail (or wasn't used)
-      if (preferences.aiRefinementMethod === "disabled" || !aiErrorMessage) {
-         await showToast({ style: Toast.Style.Success, title: "Transcription complete" });
+      if (DEFAULT_ACTION === "paste") {
+        await Clipboard.paste(finalText);
+        await showHUD("Pasted transcribed text");
+        cleanupAudioFile();
+        await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+      } else if (DEFAULT_ACTION === "copy") {
+        await Clipboard.copy(finalText);
+        await showHUD("Copied to clipboard");
+        cleanupAudioFile();
+        await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+      } else {
+        // Action is "none", stay in "done" state
+        // Show success toast only if AI didn't fail (or wasn't used)
+        if (preferences.aiRefinementMethod === "disabled" || !aiErrorMessage) {
+          await showToast({ style: Toast.Style.Success, title: "Transcription complete" });
+        }
+        // Clean up file when staying in 'done' state
+        cleanupAudioFile();
       }
-      // Clean up file when staying in 'done' state
-      cleanupAudioFile();
-    }
-  }, [preferences, refineText, saveTranscriptionToHistory, setTranscribedText, setState, cleanupAudioFile, aiErrorMessage]);
-
+    },
+    [
+      preferences,
+      refineText,
+      saveTranscriptionToHistory,
+      setTranscribedText,
+      setState,
+      cleanupAudioFile,
+      aiErrorMessage,
+    ],
+  );
 
   const startTranscription = useCallback(async () => {
     if (!config) {
@@ -129,21 +147,25 @@ export function useTranscription({
     console.log("Set state to transcribing.");
 
     // Delay to ensure audio file is fully written
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     console.log(`Checking for audio file: ${AUDIO_FILE_PATH}`);
     try {
       const stats = await fs.promises.stat(AUDIO_FILE_PATH);
       console.log(`Audio file stats: ${JSON.stringify(stats)}`);
-      if (stats.size <= 44) { // WAV header size
-        throw new Error(`Audio file is empty or too small (size: ${stats.size} bytes). Recording might have failed or captured no sound.`);
+      if (stats.size <= 44) {
+        // WAV header size
+        throw new Error(
+          `Audio file is empty or too small (size: ${stats.size} bytes). Recording might have failed or captured no sound.`,
+        );
       }
       console.log(`Audio file exists and has size ${stats.size}. Proceeding with transcription.`);
     } catch (fileError: any) {
       console.error(`Audio file check failed: ${AUDIO_FILE_PATH}`, fileError);
-      const errorMsg = fileError.code === 'ENOENT'
-        ? `Transcription failed: Audio file not found. Recording might have failed.`
-        : `Transcription failed: Cannot access audio file. ${fileError.message}`;
+      const errorMsg =
+        fileError.code === "ENOENT"
+          ? `Transcription failed: Audio file not found. Recording might have failed.`
+          : `Transcription failed: Cannot access audio file. ${fileError.message}`;
       setErrorMessage(errorMsg);
       setState("error");
       cleanupAudioFile(); // Clean up if file check fails
@@ -156,7 +178,6 @@ export function useTranscription({
     exec(
       `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps`,
       async (error, stdout, stderr) => {
-
         if (error) {
           console.error("whisper exec error:", error);
           console.error("whisper stderr:", stderr);
@@ -171,20 +192,20 @@ export function useTranscription({
             title = "Model Error";
             errMsg = `The model file at '${config.modelPath}' is invalid, incompatible, or failed to load. Please check the model file, if it's compatible with whisper.cpp (ggml) or select a different one in preferences.`;
           } else if (stderrStr.includes("No such file or directory") || errorMsgStr.includes("ENOENT")) {
-             if (errorMsgStr.includes(config.execPath)) {
-                 title = "Whisper Executable Not Found";
-                 errMsg = `The whisper executable was not found at '${config.execPath}'. Please verify the path in preferences.`;
-             } else if (stderrStr.includes(config.modelPath) || errorMsgStr.includes(config.modelPath)) {
-                 title = "Model File Not Found";
-                 errMsg = `The model file specified at '${config.modelPath}' was not found. Please check the path in preferences or download the model using the Download whisper model command.`;
-             } else {
-                 title = "File Not Found";
-                 errMsg = `A required file or directory was not found. Double check your whisper-cli and model path. ${stderrStr}`;
-             }
+            if (errorMsgStr.includes(config.execPath)) {
+              title = "Whisper Executable Not Found";
+              errMsg = `The whisper executable was not found at '${config.execPath}'. Please verify the path in preferences.`;
+            } else if (stderrStr.includes(config.modelPath) || errorMsgStr.includes(config.modelPath)) {
+              title = "Model File Not Found";
+              errMsg = `The model file specified at '${config.modelPath}' was not found. Please check the path in preferences or download the model using the Download whisper model command.`;
+            } else {
+              title = "File Not Found";
+              errMsg = `A required file or directory was not found. Double check your whisper-cli and model path. ${stderrStr}`;
+            }
           } else if (stderrStr) {
-             errMsg = `Transcription failed. Details: ${stderrStr}`;
+            errMsg = `Transcription failed. Details: ${stderrStr}`;
           } else {
-             errMsg = `Transcription failed: ${error.message}`;
+            errMsg = `Transcription failed: ${error.message}`;
           }
 
           setErrorMessage(errMsg);
@@ -198,7 +219,6 @@ export function useTranscription({
               onAction: () => openExtensionPreferences(),
             },
           });
-
         } else {
           console.log("Transcription successful.");
           const trimmedText = stdout.trim() || "[BLANK_AUDIO]";
@@ -206,7 +226,7 @@ export function useTranscription({
           // Pass text to handler to set state/save history/refine/etc.
           await handleTranscriptionResult(trimmedText);
         }
-      }
+      },
     );
   }, [config, setState, setErrorMessage, handleTranscriptionResult, cleanupAudioFile]);
 

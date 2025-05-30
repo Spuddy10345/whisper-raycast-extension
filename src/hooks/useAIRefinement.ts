@@ -33,7 +33,8 @@ async function getActivePrompt(): Promise<{ id: string; name: string; prompt: st
       {
         id: "default",
         name: "Email Format",
-        prompt: "Reformat this dictation as a professional email. Do not include a subject line. Keep all facts and information from the original text. Add appropriate greeting and signature if needed.",
+        prompt:
+          "Reformat this dictation as a professional email. Do not include a subject line. Keep all facts and information from the original text. Add appropriate greeting and signature if needed.",
         isDefault: true,
       },
     ];
@@ -41,7 +42,7 @@ async function getActivePrompt(): Promise<{ id: string; name: string; prompt: st
     await LocalStorage.setItem(AI_PROMPTS_KEY, JSON.stringify(prompts));
     await LocalStorage.setItem(ACTIVE_PROMPT_ID_KEY, "default");
   }
-  // Find active prompt or fallback to first 
+  // Find active prompt or fallback to first
   const activePrompt = prompts.find((p: any) => p.id === activePromptId) || prompts[0];
   return activePrompt;
 }
@@ -50,7 +51,7 @@ async function getActivePrompt(): Promise<{ id: string; name: string; prompt: st
 async function refineWithRaycastAI(
   text: string,
   modelId: string,
-  setAiErrorMessage: Dispatch<SetStateAction<string>>
+  setAiErrorMessage: Dispatch<SetStateAction<string>>,
 ): Promise<string> {
   try {
     const activePrompt = await getActivePrompt();
@@ -61,7 +62,10 @@ async function refineWithRaycastAI(
     return refined.trim();
   } catch (error) {
     console.error("Raycast AI refinement failed:", error);
-    const errorMessage = error instanceof Error ? `Raycast AI refinement failed: ${error.message}` : "Raycast AI refinement failed: Unknown error";
+    const errorMessage =
+      error instanceof Error
+        ? `Raycast AI refinement failed: ${error.message}`
+        : "Raycast AI refinement failed: Unknown error";
     setAiErrorMessage(errorMessage);
     throw error; // Re-throw to be caught by caller
   }
@@ -73,7 +77,7 @@ async function refineWithOllama(
   endpoint: string,
   model: string,
   apiKey: string | undefined,
-  setAiErrorMessage: Dispatch<SetStateAction<string>>
+  setAiErrorMessage: Dispatch<SetStateAction<string>>,
 ): Promise<string> {
   try {
     const activePrompt = await getActivePrompt();
@@ -177,7 +181,7 @@ export function useAIRefinement(setAiErrorMessage: Dispatch<SetStateAction<strin
             preferences.ollamaEndpoint,
             preferences.ollamaModel,
             preferences.ollamaApiKey,
-            setAiErrorMessage
+            setAiErrorMessage,
           );
         }
 
@@ -198,7 +202,7 @@ export function useAIRefinement(setAiErrorMessage: Dispatch<SetStateAction<strin
       preferences.ollamaModel,
       preferences.ollamaApiKey,
       setAiErrorMessage,
-    ] 
+    ],
   );
 
   return { refineText };

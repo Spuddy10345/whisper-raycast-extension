@@ -20,14 +20,14 @@ import {
 import { useCachedState } from "@raycast/utils";
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ChildProcessWithoutNullStreams } from "child_process";
-import path from 'path';
-import fs from 'fs';
+import path from "path";
+import fs from "fs";
 import crypto from "crypto";
 // Import custom hooks
 import { useConfiguration } from "./hooks/useConfiguration";
 import { useRecording } from "./hooks/useRecording";
 import { useTranscription } from "./hooks/useTranscription";
-import { useAIRefinement } from "./hooks/useAIRefinement"; 
+import { useAIRefinement } from "./hooks/useAIRefinement";
 
 interface Preferences {
   whisperExecutable: string;
@@ -60,7 +60,15 @@ interface AIPrompt {
 }
 
 // Define states
-type CommandState = "configuring" | "configured_waiting_selection" | "selectingPrompt" | "idle" | "recording" | "transcribing" | "done" | "error";
+type CommandState =
+  | "configuring"
+  | "configured_waiting_selection"
+  | "selectingPrompt"
+  | "idle"
+  | "recording"
+  | "transcribing"
+  | "done"
+  | "error";
 interface Config {
   execPath: string;
   modelPath: string;
@@ -81,7 +89,7 @@ export default function Command() {
   const DEFAULT_ACTION = preferences.defaultAction || "none";
   const [prompts] = useCachedState<AIPrompt[]>(AI_PROMPTS_KEY, []);
 
-  // Get refineText function from hook 
+  // Get refineText function from hook
   const { refineText } = useAIRefinement(setAiErrorMessage);
 
   // Cleanup function for audio file only
@@ -92,8 +100,8 @@ export default function Command() {
       .catch((err) => {
         if (err.code !== "ENOENT") {
           // Ignore if file doesn't exist
-             console.error("Error cleaning up audio file:", err.message);
-          }
+          console.error("Error cleaning up audio file:", err.message);
+        }
       });
   }, []);
 
@@ -105,53 +113,56 @@ export default function Command() {
     config,
     setState,
     setErrorMessage,
-    soxProcessRef
+    soxProcessRef,
   );
 
   // Handle prompt selection
-  const handlePromptSelection = useCallback(async (promptId: string) => {
-    const selectedPrompt = prompts.find(p => p.id === promptId);
-    if (selectedPrompt) {
-      setSelectedSessionPrompt(selectedPrompt);
-      // Set the selected prompt as active for this session
-      await LocalStorage.setItem("activePromptId", promptId);
-      setState("idle");
-    }
-  }, [prompts]);
+  const handlePromptSelection = useCallback(
+    async (promptId: string) => {
+      const selectedPrompt = prompts.find((p) => p.id === promptId);
+      if (selectedPrompt) {
+        setSelectedSessionPrompt(selectedPrompt);
+        // Set the selected prompt as active for this session
+        await LocalStorage.setItem("activePromptId", promptId);
+        setState("idle");
+      }
+    },
+    [prompts],
+  );
 
   // Handle prompt selection cancellation
-const handlePromptSelectionCancel = useCallback(() => {
-  setSelectedSessionPrompt(null);
-  setState("idle");
+  const handlePromptSelectionCancel = useCallback(() => {
+    setSelectedSessionPrompt(null);
+    setState("idle");
 
-  // Stop any ongoing dictation process
-  const processToStop = soxProcessRef.current;
-  if (processToStop && !processToStop.killed) {
-    try {
-      process.kill(processToStop.pid!, "SIGKILL"); // Immediate stop
-      console.log(`handlePromptSelectionCancel: Sent SIGKILL to PID ${processToStop.pid}`);
-    } catch (e) {
-      /* Ignore ESRCH */
+    // Stop any ongoing dictation process
+    const processToStop = soxProcessRef.current;
+    if (processToStop && !processToStop.killed) {
+      try {
+        process.kill(processToStop.pid!, "SIGKILL"); // Immediate stop
+        console.log(`handlePromptSelectionCancel: Sent SIGKILL to PID ${processToStop.pid}`);
+      } catch (e) {
+        /* Ignore ESRCH */
+      }
+      soxProcessRef.current = null;
     }
-    soxProcessRef.current = null;
-  }
 
-  // Clean up audio file
-  cleanupAudioFile();
+    // Clean up audio file
+    cleanupAudioFile();
 
-  // Close the Raycast window
-  closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-}, [cleanupAudioFile]);
+    // Close the Raycast window
+    closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+  }, [cleanupAudioFile]);
 
-  // Handle skipping prompt selection, will use currently active prompt or first prompt 
+  // Handle skipping prompt selection, will use currently active prompt or first prompt
   const handleSkipAndUseActivePrompt = useCallback(async () => {
     try {
       // Get active prompt ID from LocalStorage
       const activePromptId = (await LocalStorage.getItem<string>("activePromptId")) || "default";
-      
+
       // Find active prompt in the prompts list
-      const activePrompt = prompts.find(p => p.id === activePromptId);
-      
+      const activePrompt = prompts.find((p) => p.id === activePromptId);
+
       if (activePrompt) {
         setSelectedSessionPrompt(activePrompt);
         await LocalStorage.setItem("activePromptId", activePromptId);
@@ -207,7 +218,15 @@ const handlePromptSelectionCancel = useCallback(() => {
         setState("idle");
       }
     }
-  }, [state, config, preferences.aiRefinementMethod, preferences.promptBeforeDictation, prompts, handlePromptSelection, setState]);
+  }, [
+    state,
+    config,
+    preferences.aiRefinementMethod,
+    preferences.promptBeforeDictation,
+    prompts,
+    handlePromptSelection,
+    setState,
+  ]);
 
   const saveTranscriptionToHistory = useCallback(async (text: string) => {
     // Don't save empty transcription
@@ -227,8 +246,8 @@ const handlePromptSelectionCancel = useCallback(() => {
         try {
           history = JSON.parse(existingHistoryString);
           if (!Array.isArray(history)) {
-             console.warn("Invalid history data found in LocalStorage, resetting.");
-             history = [];
+            console.warn("Invalid history data found in LocalStorage, resetting.");
+            history = [];
           }
         } catch (parseError) {
           console.error("Failed to parse history from LocalStorage:", parseError);
@@ -247,7 +266,7 @@ const handlePromptSelectionCancel = useCallback(() => {
       // Limit history size
       const MAX_HISTORY_ITEMS = 100;
       if (history.length > MAX_HISTORY_ITEMS) {
-         history = history.slice(0, MAX_HISTORY_ITEMS);
+        history = history.slice(0, MAX_HISTORY_ITEMS);
       }
 
       await LocalStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
@@ -279,7 +298,7 @@ const handlePromptSelectionCancel = useCallback(() => {
     refineText,
     saveTranscriptionToHistory,
     cleanupAudioFile,
-    aiErrorMessage, 
+    aiErrorMessage,
   });
 
   // Function to stop recording and transcribe via hook
@@ -299,30 +318,30 @@ const handlePromptSelectionCancel = useCallback(() => {
       soxProcessRef.current = null; // Clear ref immediately
       console.log("Cleared sox process ref.");
       try {
-         if (!processToStop.killed) {
-             // Send SIGTERM first for graceful shutdown
-             process.kill(processToStop.pid!, "SIGTERM");
-             console.log(`Sent SIGTERM to PID ${processToStop.pid}`);
-             // Give it time to die gracefully before transcription starts
+        if (!processToStop.killed) {
+          // Send SIGTERM first for graceful shutdown
+          process.kill(processToStop.pid!, "SIGTERM");
+          console.log(`Sent SIGTERM to PID ${processToStop.pid}`);
+          // Give it time to die gracefully before transcription starts
           await new Promise((resolve) => setTimeout(resolve, 100));
-         } else {
-            console.log(`Process ${processToStop.pid} was already killed.`);
-         }
+        } else {
+          console.log(`Process ${processToStop.pid} was already killed.`);
+        }
       } catch (e) {
         // Handle potential errors (like process already exited - ESRCH)
         if (e instanceof Error && "code" in e && e.code !== "ESRCH") {
-           console.warn(`Error stopping sox process PID ${processToStop.pid}:`, e);
+          console.warn(`Error stopping sox process PID ${processToStop.pid}:`, e);
         } else {
-           console.log(`Process ${processToStop.pid} likely already exited.`);
+          console.log(`Process ${processToStop.pid} likely already exited.`);
         }
       }
     } else {
-       console.warn("stopRecordingAndTranscribe: No active sox process reference found to stop.");
+      console.warn("stopRecordingAndTranscribe: No active sox process reference found to stop.");
     }
 
     // Trigger transcription using hooks function
     await startTranscription();
-  }, [state, startTranscription]); 
+  }, [state, startTranscription]);
 
   const generateWaveformMarkdown = useCallback(() => {
     const waveformHeight = 18;
@@ -344,7 +363,7 @@ const handlePromptSelectionCancel = useCallback(() => {
         const shouldDraw = distFromCenter < normalizedAmplitude;
 
         if (shouldDraw) {
-          const intensity = 1 - (distFromCenter / normalizedAmplitude);
+          const intensity = 1 - distFromCenter / normalizedAmplitude;
           if (intensity > 0.8) line += "█";
           else if (intensity > 0.6) line += "▓";
           else if (intensity > 0.4) line += "▒";
@@ -371,18 +390,18 @@ const handlePromptSelectionCancel = useCallback(() => {
               icon={Icon.XMarkCircle}
               shortcut={{ modifiers: ["cmd"], key: "." }}
               onAction={() => {
-               const processToStop = soxProcessRef.current;
-               if (processToStop && !processToStop.killed) {
-                 try {
-                   process.kill(processToStop.pid!, "SIGKILL"); // Immediate stop
-                   console.log(`Cancel Recording: Sent SIGKILL to PID ${processToStop.pid}`);
+                const processToStop = soxProcessRef.current;
+                if (processToStop && !processToStop.killed) {
+                  try {
+                    process.kill(processToStop.pid!, "SIGKILL"); // Immediate stop
+                    console.log(`Cancel Recording: Sent SIGKILL to PID ${processToStop.pid}`);
                   } catch (e) {
                     /* Ignore ESRCH */
                   }
-                 soxProcessRef.current = null;
-               }
-               cleanupAudioFile(); // Clean up partial file
-               closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+                  soxProcessRef.current = null;
+                }
+                cleanupAudioFile(); // Clean up partial file
+                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
               }}
             />
             <Action
@@ -391,8 +410,8 @@ const handlePromptSelectionCancel = useCallback(() => {
               shortcut={{ modifiers: ["cmd"], key: "r" }}
               onAction={() => {
                 console.log("Retry Recording action triggered.");
-                cleanupAudioFile(); 
-                restartRecording(); 
+                cleanupAudioFile();
+                restartRecording();
               }}
             />
           </ActionPanel>
@@ -404,17 +423,13 @@ const handlePromptSelectionCancel = useCallback(() => {
               title={DEFAULT_ACTION === "copy" ? "Copy Text (Default)" : "Copy Text"}
               content={transcribedText}
               shortcut={{ modifiers: ["cmd"], key: "enter" }}
-              onCopy={() =>
-                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })
-              } // Close after copy
+              onCopy={() => closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })} // Close after copy
             />
             <Action.Paste
               title={DEFAULT_ACTION === "paste" ? "Paste Text (Default)" : "Paste Text"}
               content={transcribedText}
               shortcut={{ modifiers: ["cmd", "shift"], key: "enter" }}
-              onPaste={() =>
-                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })
-              } // Close after paste
+              onPaste={() => closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate })} // Close after paste
             />
             <Action
               title="View History"
@@ -429,15 +444,15 @@ const handlePromptSelectionCancel = useCallback(() => {
         );
       case "transcribing":
         // No actions available during transcription
-         return null;
+        return null;
       case "error":
-         return (
-           <ActionPanel>
-              {/* Allow to quickly open preferences if config error */}
+        return (
+          <ActionPanel>
+            {/* Allow to quickly open preferences if config error */}
             <Action
               title="Open Extension Preferences"
               icon={Icon.Gear}
-               onAction={() => {
+              onAction={() => {
                 openExtensionPreferences();
                 closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
               }}
@@ -446,28 +461,28 @@ const handlePromptSelectionCancel = useCallback(() => {
               title="Retry (Reopen Command)"
               icon={Icon.ArrowClockwise}
               onAction={() => {
-                  showHUD("Please reopen the Dictate Text command.");
-                  closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+                showHUD("Please reopen the Dictate Text command.");
+                closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
               }}
             />
             <Action
               title="Download Model"
               icon={Icon.Download}
               onAction={async () => {
-                  await launchCommand({ name: "download-model", type: LaunchType.UserInitiated });
+                await launchCommand({ name: "download-model", type: LaunchType.UserInitiated });
               }}
             />
-              <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
-           </ActionPanel>
-         );
+            <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
+          </ActionPanel>
+        );
       default: // idle, configuring
         return (
-           <ActionPanel>
-              <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
-           </ActionPanel>
+          <ActionPanel>
+            <Action title="Close" icon={Icon.XMarkCircle} onAction={closeMainWindow} />
+          </ActionPanel>
         );
     }
-  }, [state, stopRecordingAndTranscribe, transcribedText, cleanupAudioFile, DEFAULT_ACTION]); 
+  }, [state, stopRecordingAndTranscribe, transcribedText, cleanupAudioFile, DEFAULT_ACTION]);
 
   if (state === "configuring") {
     // while checking config, show loading
@@ -497,16 +512,12 @@ const handlePromptSelectionCancel = useCallback(() => {
                   onAction={handleSkipAndUseActivePrompt}
                   shortcut={{ modifiers: ["cmd"], key: "s" }}
                 />
-                <Action
-                  title="Skip & Continue"
-                  icon={Icon.ArrowRight}
-                  onAction={handlePromptSelectionCancel}
-                />
+                <Action title="Skip & Continue" icon={Icon.ArrowRight} onAction={handlePromptSelectionCancel} />
               </ActionPanel>
             }
           />
         ) : (
-          <List.Section title={`Choose from ${prompts.length} available prompt${prompts.length > 1 ? 's' : ''}`}>
+          <List.Section title={`Choose from ${prompts.length} available prompt${prompts.length > 1 ? "s" : ""}`}>
             {prompts.map((prompt) => (
               <List.Item
                 key={prompt.id}
@@ -552,9 +563,9 @@ const handlePromptSelectionCancel = useCallback(() => {
 
   if (state === "recording") {
     let refinementSection = "";
-    
+
     if (isRefinementActive && currentRefinementPrompt) {
-      const activePrompt = prompts.find(p => p.prompt === currentRefinementPrompt);
+      const activePrompt = prompts.find((p) => p.prompt === currentRefinementPrompt);
       const promptName = activePrompt?.name || "Unknown Prompt";
       refinementSection = `**AI Refinement: ${promptName}**\n\n`;
     } else if (selectedSessionPrompt) {
@@ -562,7 +573,7 @@ const handlePromptSelectionCancel = useCallback(() => {
     }
 
     const waveformWithRefinement = refinementSection + generateWaveformMarkdown();
-    
+
     return <Detail markdown={waveformWithRefinement} actions={getActionPanel()} />;
   }
 
@@ -572,37 +583,33 @@ const handlePromptSelectionCancel = useCallback(() => {
       isLoading={state === "transcribing"}
       actions={getActionPanel()}
       navigationTitle={
-         state === "transcribing" ? "Transcribing..." :
-         state === "done" ? "Transcription Result" :
-         state === "error" ? "Error" :
-         "Whisper Dictation"
+        state === "transcribing"
+          ? "Transcribing..."
+          : state === "done"
+            ? "Transcription Result"
+            : state === "error"
+              ? "Error"
+              : "Whisper Dictation"
       }
     >
-      {state === "error" && (
-           <Form.Description title="Error" text={errorMessage} />
+      {state === "error" && <Form.Description title="Error" text={errorMessage} />}
+      {(state === "done" || state === "transcribing" || state === "idle") && (
+        <Form.TextArea
+          id="dictatedText"
+          title={state === "done" ? "Dictated Text" : ""} // Hide title unless done
+          placeholder={
+            state === "transcribing"
+              ? "Transcribing audio..."
+              : state === "done"
+                ? "Transcription result"
+                : "Waiting to start..." // idle state text
+          }
+          value={state === "done" ? transcribedText : ""} // Only show text when done
+          onChange={setTranscribedText}
+        />
       )}
-       {(state === "done" || state === "transcribing" || state === 'idle') && (
-          <Form.TextArea
-            id="dictatedText"
-            title={state === 'done' ? "Dictated Text" : ""} // Hide title unless done
-            placeholder={
-                state === 'transcribing' ? "Transcribing audio..." :
-                state === 'done' ? "Transcription result" :
-                "Waiting to start..." // idle state text
-            }
-            value={state === 'done' ? transcribedText : ""} // Only show text when done
-            onChange={setTranscribedText}
-          />
-       )}
-       {state === 'transcribing' && (
-           <Form.Description text="Processing audio, please wait..." />
-       )}
-              {state === 'done' && aiErrorMessage && (
-           <Form.Description
-             title="AI Refinement Error"
-             text={aiErrorMessage}
-           />
-       )}
+      {state === "transcribing" && <Form.Description text="Processing audio, please wait..." />}
+      {state === "done" && aiErrorMessage && <Form.Description title="AI Refinement Error" text={aiErrorMessage} />}
     </Form>
   );
 }

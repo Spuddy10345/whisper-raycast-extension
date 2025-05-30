@@ -1,8 +1,8 @@
 import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction, useCallback } from "react";
 import { showToast, Toast, getPreferenceValues, environment, LocalStorage } from "@raycast/api";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
-import path from 'path';
-import fs from 'fs';
+import path from "path";
+import fs from "fs";
 import { useCachedState } from "@raycast/utils";
 
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav");
@@ -15,16 +15,16 @@ interface AIPrompt {
   prompt: string;
 }
 
-// Define states 
+// Define states
 type CommandState =
   | "configuring"
-  | "configured_waiting_selection" 
+  | "configured_waiting_selection"
   | "idle"
   | "recording"
   | "transcribing"
   | "done"
   | "error"
-  | "selectingPrompt"; 
+  | "selectingPrompt";
 
 interface Config {
   execPath: string;
@@ -59,11 +59,11 @@ export function useRecording(
   config: Config | null,
   setState: Dispatch<SetStateAction<CommandState>>,
   setErrorMessage: Dispatch<SetStateAction<string>>,
-  soxProcessRef: MutableRefObject<ChildProcessWithoutNullStreams | null>
+  soxProcessRef: MutableRefObject<ChildProcessWithoutNullStreams | null>,
 ): UseRecordingResult {
   const hasStartedRef = useRef(false);
   const stateRef = useRef<CommandState>(state);
-  
+
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -73,10 +73,9 @@ export function useRecording(
   const [activePromptId] = useCachedState<string>(ACTIVE_PROMPT_ID_KEY, "");
 
   const isRefinementActive = preferences.aiRefinementMethod !== "disabled";
-  
-  const currentRefinementPrompt = isRefinementActive && activePromptId
-    ? prompts.find(p => p.id === activePromptId)?.prompt || null
-    : null;
+
+  const currentRefinementPrompt =
+    isRefinementActive && activePromptId ? prompts.find((p) => p.id === activePromptId)?.prompt || null : null;
 
   const restartRecording = useCallback(() => {
     console.log("useRecording: restartRecording called.");
@@ -87,29 +86,30 @@ export function useRecording(
         process.kill(currentProcess.pid!, "SIGKILL");
         console.log(`useRecording: Sent SIGKILL to PID ${currentProcess.pid}`);
       } catch (e) {
-         if (e instanceof Error && 'code' in e && e.code !== 'ESRCH') {
-           console.warn(`useRecording: Error sending SIGKILL during restart:`, e);
-         } else {
-           console.log(`useRecording: Process ${currentProcess.pid} likely already exited during restart.`);
-         }
+        if (e instanceof Error && "code" in e && e.code !== "ESRCH") {
+          console.warn(`useRecording: Error sending SIGKILL during restart:`, e);
+        } else {
+          console.log(`useRecording: Process ${currentProcess.pid} likely already exited during restart.`);
+        }
       }
       soxProcessRef.current = null;
     } else {
-       console.log("useRecording: No active process found to kill for restart.");
+      console.log("useRecording: No active process found to kill for restart.");
     }
 
     hasStartedRef.current = false;
-    setErrorMessage(""); 
-    setState("idle"); 
+    setErrorMessage("");
+    setState("idle");
     console.log("useRecording: Set state to idle to trigger restart.");
-
   }, [setState, setErrorMessage, soxProcessRef]);
 
   useEffect(() => {
     if (state !== "idle" || !config || hasStartedRef.current || soxProcessRef.current) {
-      console.log(`useRecording effect skipped: state=${state}, config=${!!config}, hasStarted=${hasStartedRef.current}, processExists=${!!soxProcessRef.current}`);
-     return;
-   }
+      console.log(
+        `useRecording effect skipped: state=${state}, config=${!!config}, hasStarted=${hasStartedRef.current}, processExists=${!!soxProcessRef.current}`,
+      );
+      return;
+    }
 
     let isMounted = true;
     const startRecording = async () => {
@@ -124,11 +124,16 @@ export function useRecording(
 
         const args = [
           "-d",
-          "-t", "wav",
-          "--channels", "1",
-          "--rate", "16000",
-          "--encoding", "signed-integer",
-          "--bits", "16",
+          "-t",
+          "wav",
+          "--channels",
+          "1",
+          "--rate",
+          "16000",
+          "--encoding",
+          "signed-integer",
+          "--bits",
+          "16",
           AUDIO_FILE_PATH,
         ];
 
@@ -138,7 +143,7 @@ export function useRecording(
 
         console.log(`useRecording: Spawned sox process with PID: ${process.pid}`);
 
-        process.on('error', (err) => {
+        process.on("error", (err) => {
           console.error(`useRecording: sox process PID ${process.pid} error event:`, err);
           if (soxProcessRef.current === process) {
             soxProcessRef.current = null;
@@ -149,23 +154,22 @@ export function useRecording(
           }
         });
 
-        process.stderr.on('data', (data) => {
+        process.stderr.on("data", (data) => {
           console.log(`useRecording: sox stderr PID ${process.pid}: ${data.toString()}`);
         });
 
-        process.on('close', (code, signal) => {
+        process.on("close", (code, signal) => {
           console.log(`useRecording: sox process PID ${process.pid} closed. Code: ${code}, Signal: ${signal}`);
           if (soxProcessRef.current === process) {
             soxProcessRef.current = null;
             console.log("useRecording: Cleared sox process ref due to close event.");
-            if (isMounted && stateRef.current === "recording" && signal !== 'SIGTERM' && code !== 0) {
+            if (isMounted && stateRef.current === "recording" && signal !== "SIGTERM" && code !== 0) {
               console.warn(`useRecording: SoX process closed unexpectedly (code: ${code}, signal: ${signal}).`);
               setErrorMessage(`Recording process stopped unexpectedly.`);
               setState("error");
             }
           }
         });
-
       } catch (err: any) {
         console.error("useRecording: Error during recording setup/spawn:", err);
         if (isMounted) {
@@ -180,30 +184,32 @@ export function useRecording(
     return () => {
       isMounted = false;
     };
-  }, [config, state, setState, setErrorMessage, soxProcessRef]); 
+  }, [config, state, setState, setErrorMessage, soxProcessRef]);
 
   useEffect(() => {
     return () => {
       console.log(`useRecording cleanup on unmount: PID: ${soxProcessRef.current?.pid}`);
-      
+
       if (soxProcessRef.current && !soxProcessRef.current.killed) {
-        console.log(`useRecording cleanup: Component unmounting while process ${soxProcessRef.current.pid} is active. Killing process.`);
+        console.log(
+          `useRecording cleanup: Component unmounting while process ${soxProcessRef.current.pid} is active. Killing process.`,
+        );
         try {
           process.kill(soxProcessRef.current.pid!, "SIGKILL");
           console.log(`useRecording cleanup: Sent SIGKILL to PID ${soxProcessRef.current.pid}`);
           soxProcessRef.current = null;
         } catch (e) {
-          if (e instanceof Error && 'code' in e && e.code !== 'ESRCH') {
+          if (e instanceof Error && "code" in e && e.code !== "ESRCH") {
             console.warn(`useRecording cleanup: Error sending SIGKILL:`, e);
           }
         }
       }
     };
-  }, [soxProcessRef]); 
+  }, [soxProcessRef]);
 
-  return { 
+  return {
     restartRecording,
     currentRefinementPrompt,
-    isRefinementActive
-  }; 
+    isRefinementActive,
+  };
 }

@@ -1,13 +1,28 @@
 import { useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { getPreferenceValues, LocalStorage, openExtensionPreferences, launchCommand, LaunchType, closeMainWindow } from "@raycast/api";
+import {
+  getPreferenceValues,
+  LocalStorage,
+  openExtensionPreferences,
+  launchCommand,
+  LaunchType,
+  closeMainWindow,
+} from "@raycast/api";
 import fs from "fs";
 import { showFailureToast } from "@raycast/utils"; // Added import
 
 const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
 
 //Define states
-type CommandState = "configuring" | "configured_waiting_selection" | "selectingPrompt" | "idle" | "recording" | "transcribing" | "done" | "error";
+type CommandState =
+  | "configuring"
+  | "configured_waiting_selection"
+  | "selectingPrompt"
+  | "idle"
+  | "recording"
+  | "transcribing"
+  | "done"
+  | "error";
 
 interface Preferences {
   whisperExecutable: string;
@@ -30,7 +45,7 @@ interface Config {
 export function useConfiguration(
   setState: Dispatch<SetStateAction<CommandState>>,
   setConfig: Dispatch<SetStateAction<Config | null>>,
-  setErrorMessage: Dispatch<SetStateAction<string>>
+  setErrorMessage: Dispatch<SetStateAction<string>>,
 ) {
   const preferences = getPreferenceValues<Preferences>();
 
@@ -81,7 +96,8 @@ export function useConfiguration(
         } else if (downloadedPath && fs.existsSync(downloadedPath)) {
           finalModelPath = downloadedPath;
         } else {
-          const errorMsg = "No Whisper model found. Please run the 'Download Whisper Model' command or configure the path override in preferences.";
+          const errorMsg =
+            "No Whisper model found. Please run the 'Download Whisper Model' command or configure the path override in preferences.";
           setErrorMessage(errorMsg);
           setState("error");
           await showFailureToast(errorMsg, {
@@ -105,7 +121,11 @@ export function useConfiguration(
       }
 
       if (isMounted) {
-        setConfig({ execPath: preferences.whisperExecutable, modelPath: finalModelPath, soxPath: preferences.soxExecutablePath });
+        setConfig({
+          execPath: preferences.whisperExecutable,
+          modelPath: finalModelPath,
+          soxPath: preferences.soxExecutablePath,
+        });
         setErrorMessage("");
         setState("configured_waiting_selection");
       }
@@ -116,9 +136,5 @@ export function useConfiguration(
     return () => {
       isMounted = false;
     };
-  }, [
-    preferences.whisperExecutable,
-    preferences.modelPath,
-    preferences.soxExecutablePath
-  ]);
+  }, [preferences.whisperExecutable, preferences.modelPath, preferences.soxExecutablePath]);
 }
