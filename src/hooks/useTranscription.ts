@@ -160,12 +160,13 @@ export function useTranscription({
         );
       }
       console.log(`Audio file exists and has size ${stats.size}. Proceeding with transcription.`);
-    } catch (fileError: any) {
-      console.error(`Audio file check failed: ${AUDIO_FILE_PATH}`, fileError);
+    } catch (error: unknown) {
+      console.error(`Audio file check failed: ${AUDIO_FILE_PATH}`, error);
+      const err = error as NodeJS.ErrnoException;
       const errorMsg =
-        fileError.code === "ENOENT"
+        err.code === "ENOENT"
           ? `Transcription failed: Audio file not found. Recording might have failed.`
-          : `Transcription failed: Cannot access audio file. ${fileError.message}`;
+          : `Transcription failed: Cannot access audio file. ${err.message}`;
       setErrorMessage(errorMsg);
       setState("error");
       cleanupAudioFile(); // Clean up if file check fails

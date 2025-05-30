@@ -1,14 +1,23 @@
 {
   "name": "whisper-dictation",
+  "version": "1.0.0",
   "title": "Whisper Dictation",
   "description": "A powerful dictation tool that uses Whisper for speech-to-text transcription, with AI-powered refinement options.",
   "icon": "extension-icon.png",
+  "license": "MIT",
   "author": "finjo",
   "categories": [
     "Productivity",
-    "AI"
+    "Developer Tools"
   ],
-  "license": "MIT",
+  "screenshots": [
+    "configure-ai.png",
+    "history.png",
+    "recording.png",
+    "download-models.png",
+    "history.png",
+    "transcribed.png"
+  ],
   "commands": [
     {
       "name": "dictate",
@@ -35,134 +44,113 @@
       "mode": "view"
     }
   ],
-  "preferences": [
-    {
-      "name": "whisperExecutable",
-      "type": "textfield",
-      "required": true,
-      "title": "Whisper Executable Path",
-      "description": "Path to whisper-cpp main executable. Default assumes Homebrew on Apple Silicon. Check /usr/local/bin/whisper-cli for Intel.",
-      "default": "/opt/homebrew/bin/whisper-cli",
-      "placeholder": "/opt/homebrew/bin/whisper-cli"
-    },
-    {
-      "name": "modelPath",
-      "type": "textfield",
-      "required": false,
-      "title": "Whisper Model Path",
-      "description": "Path to your custom Whisper model file (.bin). Handled automatically if model downloaded through extension.",
-      "placeholder": "/path/to/your/ggml-MODEL.bin"
-    },
-    {
-      "name": "soxExecutablePath",
-      "title": "SoX Executable Path",
-      "description": "Full path to the 'sox' command-line audio utility. Default assumes Homebrew on Apple Silicon. Check /usr/local/bin/sox for Intel.",
-      "type": "textfield",
-      "required": true,
-      "placeholder": "/opt/homebrew/bin/sox",
-      "default": "/opt/homebrew/bin/sox"
-    },
-    {
-      "description": "Action to perform automatically after transcription completes",
-      "title": "Default Action After Transcription",
-      "name": "defaultAction",
-      "type": "dropdown",
-      "data": [
-        {
-          "title": "Paste Text",
-          "value": "paste"
-        },
-        {
-          "title": "Copy to Clipboard",
-          "value": "copy"
-        },
-        {
-          "title": "None (Show Options)",
-          "value": "none"
-        }
-      ],
-      "required": false,
-      "default": "none"
-    },
-    {
-      "name": "aiRefinementMethod",
-      "type": "dropdown",
-      "required": false,
-      "title": "AI Refinement Method",
-      "description": "Choose which AI service to use for refining transcriptions",
-      "data": [
-        {
-          "title": "Disabled",
-          "value": "disabled"
-        },
-        {
-          "title": "Raycast AI",
-          "value": "raycast"
-        },
-        {
-          "title": "Ollama/External API",
-          "value": "ollama"
-        }
-      ],
-      "default": "disabled"
-    },
-    {
-      "name": "promptBeforeDictation",
-      "type": "checkbox",
-      "required": false,
-      "title": "Choose AI prompt before each dictation",
-      "description": "When enabled, you'll be asked to select an AI refinement prompt before each dictation session (only when AI refinement is enabled)",
-      "default": false
-    },
-    {
-      "name": "aiModel",
-      "type": "dropdown",
-      "required": false,
-      "title": "Raycast AI Model",
-      "description": "Select which AI model to use for refinement",
-      "data": [
-        {
-          "title": "GPT-4o mini (Fast)",
-          "value": "OpenAI_GPT4o-mini"
-        },
-        {
-          "title": "GPT-4o (Advanced)",
-          "value": "OpenAI_GPT4o"
-        },
-        {
-          "title": "Claude Haiku (Fast)",
-          "value": "Anthropic_Claude_Haiku"
-        }
-      ],
-      "default": "OpenAI_GPT4o-mini"
-    },
-    {
-      "name": "ollamaEndpoint",
-      "type": "textfield",
-      "required": false,
-      "title": "Ollama/API Endpoint",
-      "description": "URL of your Ollama server or OpenAI compatible API (v1)",
-      "placeholder": "http://localhost:11434",
-      "default": "http://localhost:11434"
-    },
-    {
-      "name": "ollamaApiKey",
-      "type": "password",
-      "required": false,
-      "title": "API Key",
-      "description": "API key for authentication with the API server. Leave blank if not required.",
-      "placeholder": "Enter your API key"
-    },
-    {
-      "name": "ollamaModel",
-      "type": "textfield",
-      "required": false,
-      "title": "Model",
-      "description": "Name of the model to use with Ollama/External API (e.g. llama3.2:latest, gpt-4o-mini, claude-3-5-haiku-latest)",
-      "placeholder": "llama3.2:latest",
-      "default": "llama3.2:latest"
-    }
-  ],
+"preferences": [
+  {
+    "name": "whisperExecutable",
+    "title": "Whisper Executable Path",
+    "description": "Path to whisper-cpp main executable. Default assumes Homebrew on Apple Silicon. Check /usr/local/bin/whisper-cli for Intel.",
+    "type": "textfield",
+    "required": true,
+    "placeholder": "/opt/homebrew/bin/whisper-cli",
+    "default": "/opt/homebrew/bin/whisper-cli"
+  },
+  {
+    "name": "modelPath",
+    "title": "Whisper Model Path",
+    "description": "Path to your custom Whisper model file (.bin). Handled automatically if model downloaded through extension.",
+    "type": "textfield",
+    "required": false,
+    "placeholder": "/path/to/your/ggml-MODEL.bin"
+  },
+  {
+    "name": "soxExecutablePath",
+    "title": "SoX Executable Path",
+    "description": "Full path to the 'sox' command-line audio utility. Default assumes Homebrew on Apple Silicon. Check /usr/local/bin/sox for Intel.",
+    "type": "textfield",
+    "required": true,
+    "placeholder": "/opt/homebrew/bin/sox",
+    "default": "/opt/homebrew/bin/sox"
+  },
+
+  {
+    "name": "defaultAction",
+    "title": "Default Action After Transcription",
+    "description": "Action to perform automatically after transcription completes",
+    "type": "dropdown",
+    "required": false,
+    "default": "none",
+    "data": [
+      { "title": "Paste Text",           "value": "paste" },
+      { "title": "Copy to Clipboard",    "value": "copy"  },
+      { "title": "None (Show Options)",  "value": "none"  }
+    ]
+  },
+
+  {
+    "name": "aiRefinementMethod",
+    "title": "AI Refinement Method",
+    "description": "Choose which AI service to use for refining transcriptions",
+    "type": "dropdown",
+    "required": false,
+    "default": "disabled",
+    "data": [
+      { "title": "Disabled",                 "value": "disabled" },
+      { "title": "Raycast AI",               "value": "raycast"  },
+      { "title": "Ollama/External API",      "value": "ollama"   }
+    ]
+  },
+
+  {
+    "name": "promptBeforeDictation",
+    "title": "Choose AI prompt before each dictation",
+    "description": "When enabled, you'll be asked to select an AI refinement prompt before each dictation session (only when AI refinement is enabled)",
+    "type": "checkbox",
+    "required": false,
+    "default": false,
+    "label": "Ask for a prompt every time"
+  },
+
+  {
+    "name": "aiModel",
+    "title": "Raycast AI Model",
+    "description": "Select which AI model to use for refinement",
+    "type": "dropdown",
+    "required": false,
+    "default": "OpenAI_GPT4o-mini",
+    "data": [
+      { "title": "GPT-4o mini (Fast)", "value": "OpenAI_GPT4o-mini" },
+      { "title": "GPT-4o (Advanced)",  "value": "OpenAI_GPT4o"      },
+      { "title": "Claude Haiku (Fast)","value": "Anthropic_Claude_Haiku" }
+    ]
+  },
+
+  {
+    "name": "ollamaEndpoint",
+    "title": "Ollama/API Endpoint",
+    "description": "URL of your Ollama server or OpenAI compatible API (v1)",
+    "type": "textfield",
+    "required": false,
+    "placeholder": "http://localhost:11434",
+    "default": "http://localhost:11434"
+  },
+  {
+    "name": "ollamaApiKey",
+    "title": "API Key",
+    "description": "API key for authentication with the API server. Leave blank if not required.",
+    "type": "password",
+    "required": false,
+    "placeholder": "Enter your API key"
+  },
+  {
+    "name": "ollamaModel",
+    "title": "Model",
+    "description": "Name of the model to use with Ollama/External API (e.g. llama3.2:latest, gpt-4o-mini, claude-3-5-haiku-latest)",
+    "type": "textfield",
+    "required": false,
+    "placeholder": "llama3.2:latest",
+    "default": "llama3.2:latest"
+  }
+],
   "dependencies": {
     "@raycast/api": "latest"
   },
@@ -182,6 +170,5 @@
     "build": "ray build -e dist",
     "dev": "ray develop",
     "publish": "npx @raycast/api@latest publish"
-  },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  }
 }

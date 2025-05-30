@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MutableRefObject, type Dispatch, type SetStateAction, useCallback } from "react";
-import { showToast, Toast, getPreferenceValues, environment, LocalStorage } from "@raycast/api";
+import { showToast, Toast, getPreferenceValues, environment } from "@raycast/api";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import path from "path";
 import fs from "fs";
@@ -170,10 +170,11 @@ export function useRecording(
             }
           }
         });
-      } catch (err: any) {
-        console.error("useRecording: Error during recording setup/spawn:", err);
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        console.error("useRecording: Error during recording setup/spawn:", error);
         if (isMounted) {
-          setErrorMessage(`Failed to start recording: ${err.message}`);
+          setErrorMessage(`Failed to start recording: ${error.message}`);
           setState("error");
         }
       }

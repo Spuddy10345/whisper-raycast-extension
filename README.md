@@ -8,22 +8,22 @@
 
 
 <p align="center">
-  <img src="media/download-models.png" alt="Download and manage whisper models easily from within the extension">
+  <img src="metadata/download-models.png" alt="Download and manage whisper models easily from within the extension">
 </p>
 <p align="center">
-   <img src="media/configure-ai.png" alt="Refine your transcribed text with custom prompts">
+   <img src="metadata/configure-ai.png" alt="Refine your transcribed text with custom prompts">
 </p>
 <p align="center">
-   <img src="media/dictate-prompt-selection.png" alt="Choose your prompt before each transcription, or turn this off in preferences and use the selction in 'Configure AI Refinement' by default.">
+   <img src="metadata/dictate-prompt-selection.png" alt="Choose your prompt before each transcription, or turn this off in preferences and use the selction in 'Configure AI Refinement' by default.">
 </p>
 <p align="center">
-  <img src="media/recording.png" alt="Record any length of audio to transcribe">
+  <img src="metadata/recording.png" alt="Record any length of audio to transcribe">
 </p>
 <p align="center">
-  <img src="media/transcribed.png" alt="Modify your transcribed text before copying/pasting directly">
+  <img src="metadata/transcribed.png" alt="Modify your transcribed text before copying/pasting directly">
 </p>
 <p align="center">
-   <img src="media/history.png" alt="View, copy and paste you dictation/refinement history">
+   <img src="metadata/history.png" alt="View, copy and paste you dictation/refinement history">
 </p>
 
 Effortlessly convert your speech to text directly within Raycast using the power of [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp). This extension provides a simple interface to record audio, transcribe and refine it locally, privately on your machine. Refine the text with custom prompts privately using ollama, or additionally with Raycast AI or any v1 (OpenAI) compatible API.

@@ -10,7 +10,7 @@ import {
   confirmAlert,
   Alert,
 } from "@raycast/api";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import * as https from "https";
 import * as fs from "fs";
 import * as path from "path";
@@ -292,10 +292,11 @@ export default function DownloadModelCommand() {
       try {
         await fs.promises.unlink(destinationPath);
         console.log("Deleted partial file after caught error.");
-      } catch (unlinkErr: any) {
+      } catch (error: unknown) {
         // Ignore if file doesn't exist, log other errors
-        if (unlinkErr.code !== "ENOENT") {
-          console.error("Error deleting partial file after caught error:", unlinkErr);
+        const err = error as NodeJS.ErrnoException;
+        if (err.code !== "ENOENT") {
+          console.error("Error deleting partial file after caught error:", err);
         }
       }
       // Update downloaded status state to false on failure
@@ -314,7 +315,7 @@ export default function DownloadModelCommand() {
     if (
       await confirmAlert({
         title: `Delete ${model.name}?`,
-        message: `Are you sure you want to delete the model file \"${model.filename}\"? This cannot be undone.`,
+        message: `Are you sure you want to delete the model file "${model.filename}"? This cannot be undone.`,
         primaryAction: { title: "Delete", style: Alert.ActionStyle.Destructive },
       })
     ) {
@@ -338,7 +339,7 @@ export default function DownloadModelCommand() {
         toast.style = Toast.Style.Success;
         toast.title = "Model Deleted";
         toast.message = `${model.name} deleted successfully.`;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(`Failed to delete model ${model.filename}:`, error);
         await showFailureToast(error instanceof Error ? error.message : String(error), {
           title: `Failed to Delete ${model.name}`,
@@ -354,7 +355,6 @@ export default function DownloadModelCommand() {
   return (
     <List isLoading={isLoading !== false}>
       {models.map((model) => {
-        const isModelLoading = isLoading === model.key;
         const isDownloaded = downloadedModels[model.key] || false;
         //get model path and active status
         const modelPath = path.join(MODEL_DIR, model.filename);

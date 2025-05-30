@@ -141,7 +141,7 @@ export default function Command() {
       try {
         process.kill(processToStop.pid!, "SIGKILL"); // Immediate stop
         console.log(`handlePromptSelectionCancel: Sent SIGKILL to PID ${processToStop.pid}`);
-      } catch (e) {
+      } catch {
         /* Ignore ESRCH */
       }
       soxProcessRef.current = null;
@@ -395,7 +395,7 @@ export default function Command() {
                   try {
                     process.kill(processToStop.pid!, "SIGKILL"); // Immediate stop
                     console.log(`Cancel Recording: Sent SIGKILL to PID ${processToStop.pid}`);
-                  } catch (e) {
+                  } catch {
                     /* Ignore ESRCH */
                   }
                   soxProcessRef.current = null;

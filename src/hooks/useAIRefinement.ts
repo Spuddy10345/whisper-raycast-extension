@@ -13,14 +13,20 @@ const AI_PROMPTS_KEY = "aiPrompts";
 const ACTIVE_PROMPT_ID_KEY = "activePromptId";
 
 // Get active prompt from LocalStorage
-async function getActivePrompt(): Promise<{ id: string; name: string; prompt: string; isDefault?: boolean }> {
+interface AIPrompt {
+  id: string;
+  name: string;
+  prompt: string;
+  isDefault?: boolean;
+}
+async function getActivePrompt(): Promise<AIPrompt> {
   const activePromptId = (await LocalStorage.getItem<string>(ACTIVE_PROMPT_ID_KEY)) || "default";
   const promptsJson = await LocalStorage.getItem<string>(AI_PROMPTS_KEY);
 
-  let prompts = [];
+  let prompts: AIPrompt[] = [];
   if (promptsJson) {
     try {
-      prompts = JSON.parse(promptsJson);
+      prompts = JSON.parse(promptsJson) as AIPrompt[];
     } catch (e) {
       console.error("Failed to parse AI prompts from LocalStorage:", e);
       prompts = []; // Reset if parse fails
@@ -43,7 +49,7 @@ async function getActivePrompt(): Promise<{ id: string; name: string; prompt: st
     await LocalStorage.setItem(ACTIVE_PROMPT_ID_KEY, "default");
   }
   // Find active prompt or fallback to first
-  const activePrompt = prompts.find((p: any) => p.id === activePromptId) || prompts[0];
+  const activePrompt = prompts.find((p) => p.id === activePromptId) || prompts[0];
   return activePrompt;
 }
 
