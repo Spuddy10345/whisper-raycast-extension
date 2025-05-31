@@ -112,8 +112,9 @@ export function useConfiguration(
           });
           return;
         }
-      } catch {
+      } catch (error) {
         const errorMsg = "Error accessing configuration. Check console logs.";
+        console.error("Configuration error:", error);
         setErrorMessage(errorMsg);
         setState("error");
         await showFailureToast(errorMsg, { title: "Configuration Error" });

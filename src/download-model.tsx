@@ -193,13 +193,15 @@ export default function DownloadModelCommand() {
       console.log(`Created write stream for ${destinationPath}`);
 
       await new Promise<void>((resolve, reject) => {
-        const request = (url: string) => {
+        const request = (url: string, redirectCount = 0) => {
+          if (redirectCount > 5) {
+            throw new Error('Too many redirects');
+          }
           console.log(`Making HTTPS GET request to: ${url}`);
           https
             .get(url, (response) => {
               console.log(`Response status code: ${response.statusCode}`);
               console.log("Response headers:", response.headers);
-
               // Handle redirects
               if (
                 response.statusCode &&
@@ -210,7 +212,7 @@ export default function DownloadModelCommand() {
                 console.log(`Redirecting to ${response.headers.location}`);
                 //Close current response stream before new request
                 response.destroy();
-                request(response.headers.location); // Recursively call request with the new URL
+                request(response.headers.location, redirectCount + 1); // Track redirect count
                 return;
               }
 
@@ -253,19 +255,37 @@ export default function DownloadModelCommand() {
               // Listen for 'error' on both response and file stream
               fileStream.on("error", (err) => {
                 console.error(`File stream error for ${model.filename}:`, err);
-                fs.unlink(destinationPath, () => {}); // Attempt delete, ignore error
+                fs.unlink(destinationPath, (unlinkErr) => {
+                  if (unlinkErr && unlinkErr.code !== "ENOENT") {
+                    console.error(`Error deleting partial file after stream error:`, unlinkErr);
+                  } else {
+                    console.log("Successfully deleted partial file after stream error.");
+                  }
+                });
                 reject(err); // Reject promise on file stream error
               });
 
               response.on("error", (err) => {
                 console.error(`Response stream error during download for ${model.filename}:`, err);
-                fs.unlink(destinationPath, () => {});
+                fs.unlink(destinationPath, (unlinkErr) => {
+                  if (unlinkErr && unlinkErr.code !== "ENOENT") {
+                    console.error(`Error deleting partial file after response error:`, unlinkErr);
+                  } else {
+                    console.log("Successfully deleted partial file after response error.");
+                  }
+                });
                 reject(err);
               });
             })
             .on("error", (err) => {
               console.error(`HTTPS request error for ${model.url}:`, err);
-              fs.unlink(destinationPath, () => {});
+              fs.unlink(destinationPath, (unlinkErr) => {
+                if (unlinkErr && unlinkErr.code !== "ENOENT") {
+                  console.error(`Error deleting partial file after HTTPS error:`, unlinkErr);
+                } else {
+                  console.log("Successfully deleted partial file after HTTPS error.");
+                }
+              });
               reject(err);
             });
         };

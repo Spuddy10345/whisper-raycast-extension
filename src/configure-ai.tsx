@@ -52,7 +52,7 @@ export default function ConfigureAI() {
       id: "default",
       name: "Email Format",
       prompt:
-        "Reformat this dictation as a professional email. Keep all facts and information from the original text, keep the wording similair just reformat and fix any grammatical errors. Add appropriate greeting and signature if needed, but don't include a subject line.",
+        "Reformat this dictation as a professional email. Keep all facts and information from the original text, keep the wording similar just reformat and fix any grammatical errors. Add appropriate greeting and signature if needed, but don't include a subject line.",
     },
     {
       id: "bullet",
@@ -70,7 +70,7 @@ export default function ConfigureAI() {
       id: "command",
       name: "Generate Shell Command",
       prompt:
-        "Return a zsh shell command based on the description provided within the prompt. The command should be precise, follow best practises. If using any non-default packages, assume the user has that package installed already. Use the best package for the job. Only provide the command, abosultely nothing else. ",
+        "Return a zsh shell command based on the description provided within the prompt. The command should be precise, follow best practices. If using any non-default packages, assume the user has that package installed already. Use the best package for the job. Only provide the command, absolutely nothing else.",
     },
     {
       id: "fix",
@@ -82,7 +82,7 @@ export default function ConfigureAI() {
       id: "table",
       name: "Make Markdown Table",
       prompt:
-        "Create a markdown table from the information given. Provide only the table and absolutely nothing else. Do not include it withion a markdown code block (e.g.``` {table} ```) Add no additional commentary, just a clear, well formatted markdown table.",
+        "Create a markdown table from the information given. Provide only the table and absolutely nothing else. Do not include it within a markdown code block (e.g.``` {table} ```) Add no additional commentary, just a clear, well formatted markdown table.",
     },
   ]);
 

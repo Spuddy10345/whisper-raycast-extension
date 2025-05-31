@@ -3,7 +3,7 @@ import { showToast, Toast, getPreferenceValues, environment } from "@raycast/api
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import path from "path";
 import fs from "fs";
-import { useCachedState } from "@raycast/utils";
+import { useCachedState, showFailureToast } from "@raycast/utils";
 
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav");
 const AI_PROMPTS_KEY = "aiPrompts";
@@ -17,7 +17,7 @@ interface AIPrompt {
 
 // Define states
 type CommandState =
-  | "configuring"
+  | "configuringfind . -type f -mmin -10 -delete"
   | "configured_waiting_selection"
   | "idle"
   | "recording"
@@ -165,8 +165,10 @@ export function useRecording(
             console.log("useRecording: Cleared sox process ref due to close event.");
             if (isMounted && stateRef.current === "recording" && signal !== "SIGTERM" && code !== 0) {
               console.warn(`useRecording: SoX process closed unexpectedly (code: ${code}, signal: ${signal}).`);
-              setErrorMessage(`Recording process stopped unexpectedly.`);
+              const errorMessage = `Recording process stopped unexpectedly.`;
+              setErrorMessage(errorMessage);
               setState("error");
+              showFailureToast(errorMessage, { title: "Recording Error" });
             }
           }
         });

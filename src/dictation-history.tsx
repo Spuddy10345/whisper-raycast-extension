@@ -1,4 +1,5 @@
 import { ActionPanel, Action, List, LocalStorage, Icon, confirmAlert, Alert, showToast, Toast } from "@raycast/api";
+import { showFailureToast } from "@raycast/utils";
 import { useState, useCallback, useEffect } from "react";
 
 interface TranscriptionHistoryItem {
@@ -19,7 +20,7 @@ export default function DictationHistoryCommand() {
       try {
         const rawData = await LocalStorage.getItem<string>(HISTORY_STORAGE_KEY);
         console.log(
-          `History Command: Direct LocalStorage data: ${rawData ? rawData.substring(0, 150) + "..." : "null or empty"}`,
+          `history command: found ${rawData ? "data" : "no data"} in localstorage`
         );
 
         if (rawData) {
@@ -48,10 +49,10 @@ export default function DictationHistoryCommand() {
 
   // Save history changes back to LocalStorage
   useEffect(() => {
-    if (!isLoading) {
+   if (!isLoading) {
       LocalStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history))
         .then(() => console.log(`Saved updated history with ${history.length} items`))
-        .catch((error) => console.error("Error saving history:", error));
+        .catch((error) => showFailureToast(error, { title: "Could not save history" }));
     }
   }, [history, isLoading]);
 
@@ -139,7 +140,7 @@ export default function DictationHistoryCommand() {
                       title="Copy Text"
                       icon={Icon.Clipboard}
                       content={item.text}
-                      shortcut={{ modifiers: ["cmd"], key: "enter" }}
+                      shortcut={{ modifiers: [], key: "enter" }}
                     />
                     <Action.Paste
                       title="Paste Text"

@@ -59,7 +59,7 @@ Before installing the extension, you need the following installed and configured
 1.  **Raycast:** You need the Raycast app installed.
 2.  **`whisper.cpp`:** You must install whisper-cpp. 
     * The easiest way is to use [Homebrew](https://brew.sh/): `brew install whisper-cpp`
-    * If installed another way make sure to update the path to your whisper-cli executable iin the extension's preferences.
+    * If installed another way make sure to update the path to your whisper-cli executable in the extension's preferences.
 3.  **Whisper Model File:** 
     * Download a model using the `Download Whisper Model` extension command. This will configure the model's path automatically. 
     * Alternatively, download a model yourself (`ggml-{model}.bin`) and point the extension to it's path in preferences.
@@ -75,11 +75,11 @@ This installation assumes you have met all requirements posted above [Requiremen
 
 ### 2. Install the Extension
 
-Since this extension isn't on the Raycast Store ,you'll need to install it from the source code:
+Since this extension isn't on the Raycast Store, you'll need to install it from the source code:
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/your-username/whisper-raycast-extension.git 
+    git clone https://github.com/Spuddy10345/whisper-raycast-extension.git 
     cd whisper-raycast-extension
     ```
 2.  **Install Dependencies:**
@@ -212,7 +212,7 @@ The extension downloader currently supports the following whisper models, howeve
         * Double check your endpoint. Only include the base URL in the endpoint e.g.:
             *   **Ollama:** http://localhost:11434
             *   **External API:** https://api.anthropic.com
-    *   If using Raycast AI make sure that you have payed for Raycast Pro
+    *   If using Raycast AI make sure that you have paid for Raycast Pro
 
 ## 🙏 Contributing
 

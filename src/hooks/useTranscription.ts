@@ -44,6 +44,7 @@ interface Preferences {
 }
 
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav");
+const WAV_HEADER_SIZE = 44;
 
 interface UseTranscriptionProps {
   config: Config | null;
@@ -103,16 +104,22 @@ export function useTranscription({
 
       const DEFAULT_ACTION = preferences.defaultAction || "none";
 
+      const handleClipboardActionAndClose = async (action: "paste" | "copy", text: string) => {
+        if (action === "paste") {
+          await Clipboard.paste(text);
+          await showHUD("Pasted transcribed text");
+        } else {
+          await Clipboard.copy(text);
+          await showHUD("Copied to clipboard");
+        }
+        cleanupAudioFile();
+        await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+      };
+
       if (DEFAULT_ACTION === "paste") {
-        await Clipboard.paste(finalText);
-        await showHUD("Pasted transcribed text");
-        cleanupAudioFile();
-        await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+        await handleClipboardActionAndClose("paste", finalText);
       } else if (DEFAULT_ACTION === "copy") {
-        await Clipboard.copy(finalText);
-        await showHUD("Copied to clipboard");
-        cleanupAudioFile();
-        await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+        await handleClipboardActionAndClose("copy", finalText);
       } else {
         // Action is "none", stay in "done" state
         // Show success toast only if AI didn't fail (or wasn't used)
@@ -153,7 +160,7 @@ export function useTranscription({
     try {
       const stats = await fs.promises.stat(AUDIO_FILE_PATH);
       console.log(`Audio file stats: ${JSON.stringify(stats)}`);
-      if (stats.size <= 44) {
+      if (stats.size <= WAV_HEADER_SIZE) {
         // WAV header size
         throw new Error(
           `Audio file is empty or too small (size: ${stats.size} bytes). Recording might have failed or captured no sound.`,

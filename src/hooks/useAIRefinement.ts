@@ -90,8 +90,6 @@ async function refineWithOllama(
     const baseEndpoint = endpoint.endsWith("/") ? endpoint.slice(0, -1) : endpoint;
     const ollamaUrl = `${baseEndpoint}/v1/chat/completions`;
 
-    console.log(`Calling Ollama endpoint: ${ollamaUrl} with model: ${model}`);
-
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
