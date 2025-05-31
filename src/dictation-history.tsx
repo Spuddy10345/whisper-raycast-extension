@@ -19,9 +19,7 @@ export default function DictationHistoryCommand() {
     async function loadHistory() {
       try {
         const rawData = await LocalStorage.getItem<string>(HISTORY_STORAGE_KEY);
-        console.log(
-          `history command: found ${rawData ? "data" : "no data"} in localstorage`
-        );
+        console.log(`history command: found ${rawData ? "data" : "no data"} in localstorage`);
 
         if (rawData) {
           const parsedData = JSON.parse(rawData);
@@ -49,7 +47,7 @@ export default function DictationHistoryCommand() {
 
   // Save history changes back to LocalStorage
   useEffect(() => {
-   if (!isLoading) {
+    if (!isLoading) {
       LocalStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history))
         .then(() => console.log(`Saved updated history with ${history.length} items`))
         .catch((error) => showFailureToast(error, { title: "Could not save history" }));

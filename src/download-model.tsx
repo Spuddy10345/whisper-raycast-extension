@@ -195,7 +195,7 @@ export default function DownloadModelCommand() {
       await new Promise<void>((resolve, reject) => {
         const request = (url: string, redirectCount = 0) => {
           if (redirectCount > 5) {
-            throw new Error('Too many redirects');
+            throw new Error("Too many redirects");
           }
           console.log(`Making HTTPS GET request to: ${url}`);
           https

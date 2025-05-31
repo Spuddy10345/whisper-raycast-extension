@@ -17,7 +17,7 @@ interface AIPrompt {
 
 // Define states
 type CommandState =
-  | "configuringfind . -type f -mmin -10 -delete"
+  | "configuring"
   | "configured_waiting_selection"
   | "idle"
   | "recording"
