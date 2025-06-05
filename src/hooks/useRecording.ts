@@ -32,15 +32,6 @@ interface Config {
   soxPath: string;
 }
 
-interface Preferences {
-  aiRefinementMethod: "disabled" | "raycast" | "ollama";
-  aiModel: string;
-  ollamaEndpoint: string;
-  ollamaApiKey: string;
-  ollamaModel: string;
-  promptBeforeDictation: boolean;
-}
-
 interface UseRecordingResult {
   restartRecording: () => void;
   currentRefinementPrompt: string | null;
@@ -151,6 +142,7 @@ export function useRecording(
           if (isMounted) {
             setErrorMessage(`Recording failed: ${err.message}`);
             setState("error");
+            showFailureToast(err, { title: "Recording failed" });
           }
         });
 

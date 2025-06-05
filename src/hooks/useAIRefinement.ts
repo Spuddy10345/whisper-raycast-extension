@@ -1,13 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import { AI, LocalStorage, environment, getPreferenceValues, showToast, Toast } from "@raycast/api";
-
-interface Preferences {
-  aiRefinementMethod: "disabled" | "raycast" | "ollama";
-  aiModel: string;
-  ollamaEndpoint: string;
-  ollamaApiKey: string;
-  ollamaModel: string;
-}
+import { showFailureToast } from "@raycast/utils";
 
 const AI_PROMPTS_KEY = "aiPrompts";
 const ACTIVE_PROMPT_ID_KEY = "activePromptId";
@@ -172,9 +165,7 @@ export function useAIRefinement(setAiErrorMessage: Dispatch<SetStateAction<strin
           if (!environment.canAccess("AI")) {
             const msg = "Raycast Pro subscription required for AI features.";
             setAiErrorMessage(msg);
-            toast.style = Toast.Style.Failure;
-            toast.title = "Raycast AI Not Available";
-            toast.message = msg;
+            showFailureToast(new Error(msg), { title: "AI Access Denied" });
             return text; // Return og text
           }
           refinedText = await refineWithRaycastAI(text, preferences.aiModel, setAiErrorMessage);
@@ -194,8 +185,7 @@ export function useAIRefinement(setAiErrorMessage: Dispatch<SetStateAction<strin
         return refinedText;
       } catch (error) {
         console.error("AI refinement failed in refineText:", error);
-        toast.style = Toast.Style.Failure;
-        toast.title = "AI Refinement Failed";
+        showFailureToast(error, { title: "AI Refinement Failed" });
         return text; // Return og text
       }
     },

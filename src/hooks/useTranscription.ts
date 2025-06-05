@@ -1,5 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import fs from "fs";
 import path from "path";
 import { showFailureToast } from "@raycast/utils";
@@ -29,18 +29,6 @@ interface Config {
   execPath: string;
   modelPath: string;
   soxPath: string;
-}
-interface Preferences {
-  whisperExecutable: string;
-  modelPath: string;
-  soxExecutablePath: string;
-  defaultAction: "paste" | "copy" | "none";
-  aiRefinementMethod: "disabled" | "raycast" | "ollama";
-  aiModel: string;
-  ollamaEndpoint: string;
-  ollamaApiKey: string;
-  ollamaModel: string;
-  promptBeforeDictation: boolean;
 }
 
 const AUDIO_FILE_PATH = path.join(environment.supportPath, "raycast_dictate_audio.wav");
@@ -112,8 +100,10 @@ export function useTranscription({
           await Clipboard.copy(text);
           await showHUD("Copied to clipboard");
         }
-        cleanupAudioFile();
-        await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+        await Promise.all([
+          cleanupAudioFile(),
+          closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate }),
+        ]);
       };
 
       if (DEFAULT_ACTION === "paste") {
@@ -183,8 +173,9 @@ export function useTranscription({
     console.log(`Starting transcription with model: ${config.modelPath}`);
 
     // Execute whisper-cli
-    exec(
-      `"${config.execPath}" -m "${config.modelPath}" -f "${AUDIO_FILE_PATH}" -l auto -otxt --no-timestamps`,
+    execFile(
+      config.execPath,
+      ["-m", config.modelPath, "-f", AUDIO_FILE_PATH, "-l", "auto", "-otxt", "--no-timestamps"],
       async (error, stdout, stderr) => {
         if (error) {
           console.error("whisper exec error:", error);
