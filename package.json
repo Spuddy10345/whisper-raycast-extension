@@ -84,16 +84,20 @@
       "default": "none",
       "data": [
         {
-          "title": "Paste Text",
-          "value": "paste"
+          "title": "None (Show Options)",
+          "value": "none"
         },
         {
           "title": "Copy to Clipboard",
           "value": "copy"
         },
         {
-          "title": "None (Show Options)",
-          "value": "none"
+          "title": "Paste Text",
+          "value": "paste"
+        },
+        {
+          "title": "Copy & Paste Text",
+          "value": "copy_paste"
         }
       ]
     },

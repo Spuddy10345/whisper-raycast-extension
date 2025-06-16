@@ -69,6 +69,8 @@ Before installing the extension, you need the following installed and configured
 
 ## 🚀 Installation
 
+**This ectension is now available to download from the [Raycast Store](https://www.raycast.com/finjo/whisper-dictation). However if you'd prefer to build from source see below**
+
 ### 1. Prerequisites
 
 This installation assumes you have met all requirements posted above [Requirements](#-requirements). Have the full paths to your `whisper.cpp` executable, and the downloaded model file ready if not downloading through the extension.
@@ -213,16 +215,6 @@ The extension downloader currently supports the following whisper models, howeve
             *   **Ollama:** http://localhost:11434
             *   **External API:** https://api.anthropic.com
     *   If using Raycast AI make sure that you have paid for Raycast Pro
-
-## 🙏 Contributing
-
-Contributions are welcome! If you find a bug or have a feature request, please open an issue on the GitHub repository. If you'd like to contribute code, please open a Pull Request.
-
-1.  Fork the repository.
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
 
 ## 📄 License
 
