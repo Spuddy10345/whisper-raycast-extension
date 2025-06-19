@@ -64,7 +64,7 @@ interface Config {
   soxPath: string;
 }
 
-export default function Command() {
+export default function DictateWithAICommand() {
   const [state, setState] = useState<CommandState>("configuring");
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
