@@ -169,13 +169,7 @@ export default function SimpleDictateCommand() {
     await startTranscription();
   }, [state, startTranscription]);
 
-  const { restartRecording } = useRecording(
-    state,
-    config,
-    setState,
-    setErrorMessage,
-    soxProcessRef,
-  );
+  const { restartRecording } = useRecording(state, config, setState, setErrorMessage, soxProcessRef);
 
   // Effect to automatically transition to idle after configuration (skip prompt selection)
   useEffect(() => {
@@ -363,11 +357,7 @@ export default function SimpleDictateCommand() {
       default:
         return (
           <ActionPanel>
-            <Action 
-              title="Start Recording" 
-              icon={Icon.Microphone} 
-              onAction={() => setState("recording")} 
-            />
+            <Action title="Start Recording" icon={Icon.Microphone} onAction={() => setState("recording")} />
             <Action
               title="View History"
               icon={Icon.List}
@@ -388,7 +378,15 @@ export default function SimpleDictateCommand() {
           </ActionPanel>
         );
     }
-  }, [state, stopRecordingAndTranscribe, transcribedText, cleanupAudioFile, DEFAULT_ACTION, handlePasteAndCopy, restartRecording]);
+  }, [
+    state,
+    stopRecordingAndTranscribe,
+    transcribedText,
+    cleanupAudioFile,
+    DEFAULT_ACTION,
+    handlePasteAndCopy,
+    restartRecording,
+  ]);
 
   if (state === "configuring") {
     return <Detail isLoading={true} markdown={"Checking Whisper configuration..."} />;
@@ -430,7 +428,9 @@ export default function SimpleDictateCommand() {
         />
       )}
       {state === "transcribing" && <Form.Description text="Processing audio, please wait..." />}
-      {state === "idle" && <Form.Description text="Simple dictation without AI refinement. Press Enter to start recording." />}
+      {state === "idle" && (
+        <Form.Description text="Simple dictation without AI refinement. Press Enter to start recording." />
+      )}
     </Form>
   );
 }

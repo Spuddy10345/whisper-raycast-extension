@@ -99,9 +99,9 @@ export function useTranscription({
 
       // Apply AI refinement if enabled and text is not empty and not skipped for session
       if (
-        preferences.aiRefinementMethod !== "disabled" && 
-        !skipAIForSession && 
-        rawText && 
+        preferences.aiRefinementMethod !== "disabled" &&
+        !skipAIForSession &&
+        rawText &&
         rawText !== "[BLANK_AUDIO]"
       ) {
         try {
