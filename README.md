@@ -2,29 +2,6 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-<p align="center">
-  <img src="./assets/extension-icon.png" alt="Extension Icon" width="200">
-</p>
-
-
-<p align="center">
-  <img src="media/download-models.png" alt="Download and manage whisper models easily from within the extension">
-</p>
-<p align="center">
-   <img src="media/configure-ai.png" alt="Refine your transcribed text with custom prompts">
-</p>
-<p align="center">
-   <img src="media/dictate-prompt-selection.png" alt="Choose your prompt before each transcription, or turn this off in preferences and use the selction in 'Configure AI Refinement' by default.">
-</p>
-<p align="center">
-  <img src="media/recording.png" alt="Record any length of audio to transcribe">
-</p>
-<p align="center">
-  <img src="media/transcribed.png" alt="Modify your transcribed text before copying/pasting directly">
-</p>
-<p align="center">
-   <img src="media/history.png" alt="View, copy and paste you dictation/refinement history">
-</p>
 
 Effortlessly convert your speech to text directly within Raycast using the power of [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp). This extension provides a simple interface to record audio, transcribe and refine it locally, privately on your machine. Refine the text with custom prompts privately using ollama, or additionally with Raycast AI or any v1 (OpenAI) compatible API.
 ## ✨ Features
@@ -35,22 +12,6 @@ Effortlessly convert your speech to text directly within Raycast using the power
     **Dictation History** Saves all transcriptions locally with timestamps which can be browsed, copied and pasted using the Dictation History command.
 *   **Simple Interface:** Start recording, press Enter to stop, copy or paste directly into your active window.
 *   **Configurable Output:** Choose to choose, or automatically paste/copy to clipboard. 
-
-## 📚 Table of Contents
-
-*   [Features](#-features)
-*   [Requirements](#-requirements)
-*   [Installation](#-installation)
-    *   [1. Prerequisites](#1-prerequisites)
-    *   [2. Install the Extension](#2-install-the-extension)
-*   [Configuration](#️-configuration)
-*   [Usage](#-usage)
-*   [Refine with AI](#-refine-with-ai)
-*   [Models](#-models)
-*   [Troubleshooting](#-troubleshooting)
-*   [Contributing](#-contributing)
-*   [License](#-license)
-*   [Acknowledgements](#-acknowledgements)
 
 ## ⚠️ Requirements
 
