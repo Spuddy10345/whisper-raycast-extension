@@ -104,16 +104,16 @@ const MIN_MODEL_SIZE = 77000000; // Minimum size for a model to be considered va
 function parseSize(sizeStr: string): number {
   const match = sizeStr.match(/^([\d.]+)\s*(MB|GB)$/);
   if (!match) return 0;
-  
+
   const value = parseFloat(match[1]);
   const unit = match[2];
-  
+
   if (unit === "MB") {
     return value * 1024 * 1024;
   } else if (unit === "GB") {
     return value * 1024 * 1024 * 1024;
   }
-  
+
   return 0;
 }
 
@@ -121,24 +121,24 @@ async function checkModelExists(filename: string): Promise<boolean> {
   const filePath = path.join(MODEL_DIR, filename);
   try {
     const stats = await fs.promises.stat(filePath);
-    
+
     // Find model with matching filename
-    const model = models.find(m => m.filename === filename);
+    const model = models.find((m) => m.filename === filename);
     if (!model || !model.size) {
       // Fallback to basic check if model not found or no size info
       return stats.size >= MIN_MODEL_SIZE;
     }
-    
+
     const expectedSize = parseSize(model.size);
     if (expectedSize === 0) {
       // Fallback to basic size check if size parsing failed
       return stats.size >= MIN_MODEL_SIZE;
     }
-    
-    // Allow 10% tolerance for size variation 
+
+    // Allow 10% tolerance for size variation
     const minSize = expectedSize * 0.9;
     const maxSize = expectedSize * 1.1;
-    
+
     return stats.size >= minSize && stats.size <= maxSize;
   } catch {
     return false;
@@ -462,18 +462,18 @@ export default function DownloadModelCommand() {
         const currentStoredPath = await LocalStorage.getItem<string>(DOWNLOADED_MODEL_PATH_KEY);
         if (currentStoredPath === filePath) {
           console.log("Clearing active model path from LocalStorage as it was deleted.");
-          
+
           // Find the first available downloaded model to set as active
-          const firstDownloadedModel = models.find(m => 
-            m.key !== model.key && updatedDownloadedModels[m.key] === true
+          const firstDownloadedModel = models.find(
+            (m) => m.key !== model.key && updatedDownloadedModels[m.key] === true,
           );
-          
+
           if (firstDownloadedModel) {
             const newActiveModelPath = path.join(MODEL_DIR, firstDownloadedModel.filename);
             console.log(`Setting new active model to: ${firstDownloadedModel.name} at ${newActiveModelPath}`);
             await LocalStorage.setItem(DOWNLOADED_MODEL_PATH_KEY, newActiveModelPath);
             setActiveModelPath(newActiveModelPath);
-            
+
             // Update the toast message to inform user about the new active model
             toast.message = `${model.name} deleted successfully. ${firstDownloadedModel.name} is now the active model.`;
           } else {
