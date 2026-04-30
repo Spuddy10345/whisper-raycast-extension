@@ -16,7 +16,7 @@ import {
   openExtensionPreferences,
   PopToRootType,
 } from "@raycast/api";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { ChildProcessWithoutNullStreams } from "child_process";
 import path from "path";
 import fs from "fs";
@@ -218,27 +218,43 @@ export default function SimpleDictateCommand() {
     };
   }, [cleanupAudioFile]);
 
+  const waveformWidth =
+    preferences.waveformWidth === "custom"
+      ? parseInt(preferences.waveformWidthCustom, 10) || 70
+      : parseInt(preferences.waveformWidth, 10) || 70;
+
+  // Precompute the static base-amplitude curve for each column. Depends only on
+  // waveformWidth, so we only recompute it when the preference changes — not on
+  // every animation frame.
+  const baseAmplitudes = useMemo(() => {
+    const arr = new Float32Array(waveformWidth);
+    for (let x = 0; x < waveformWidth; x++) {
+      const t = (x / waveformWidth) * Math.PI;
+      arr[x] = Math.sin(t * 4) * 0.3 + Math.sin(t * 8) * 0.15 + Math.sin(t * 2) * 0.25;
+    }
+    return arr;
+  }, [waveformWidth]);
+
   const generateWaveformMarkdown = useCallback(() => {
     const waveformHeight = 18;
-    const waveformWidth = 105;
-    let waveform = "```\n";
-    waveform += "RECORDING AUDIO... PRESS ENTER TO STOP\n\n";
+    const header = waveformWidth >= 40 ? "RECORDING AUDIO... PRESS ENTER TO STOP" : "RECORDING (Enter to stop)";
+    let waveform = "```\n" + header + "\n\n";
+
+    // Compute the time-varying normalized amplitude per column once per frame,
+    // then reuse it across all rows — distFromCenter is the only y-dependent term.
+    const normalizedAmplitudes = new Float32Array(waveformWidth);
+    for (let x = 0; x < waveformWidth; x++) {
+      const randomFactor = Math.sin(x + waveformSeed * 0.3) * 0.2;
+      normalizedAmplitudes[x] = (baseAmplitudes[x] + randomFactor + 0.7) * waveformHeight * 0.5;
+    }
 
     for (let y = 0; y < waveformHeight; y++) {
+      const distFromCenter = Math.abs(y - waveformHeight / 2);
       let line = "";
       for (let x = 0; x < waveformWidth; x++) {
-        const baseAmplitude1 = Math.sin((x / waveformWidth) * Math.PI * 4) * 0.3;
-        const baseAmplitude2 = Math.sin((x / waveformWidth) * Math.PI * 8) * 0.15;
-        const baseAmplitude3 = Math.sin((x / waveformWidth) * Math.PI * 2) * 0.25;
-        const baseAmplitude = baseAmplitude1 + baseAmplitude2 + baseAmplitude3;
-        const randomFactor = Math.sin(x + waveformSeed * 0.3) * 0.2;
-        const amplitude = baseAmplitude + randomFactor;
-        const normalizedAmplitude = (amplitude + 0.7) * waveformHeight * 0.5;
-        const distFromCenter = Math.abs(y - waveformHeight / 2);
-        const shouldDraw = distFromCenter < normalizedAmplitude;
-
-        if (shouldDraw) {
-          const intensity = 1 - distFromCenter / normalizedAmplitude;
+        const norm = normalizedAmplitudes[x];
+        if (distFromCenter < norm) {
+          const intensity = 1 - distFromCenter / norm;
           if (intensity > 0.8) line += "█";
           else if (intensity > 0.6) line += "▓";
           else if (intensity > 0.4) line += "▒";
@@ -252,7 +268,7 @@ export default function SimpleDictateCommand() {
     }
     waveform += "```";
     return waveform;
-  }, [waveformSeed]);
+  }, [waveformSeed, waveformWidth, baseAmplitudes]);
 
   const getActionPanel = useCallback(() => {
     switch (state) {
