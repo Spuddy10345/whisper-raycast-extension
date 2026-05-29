@@ -30,7 +30,7 @@ Before installing the extension, you need the following installed and configured
 
 ## 🚀 Installation
 
-**This ectension is now available to download from the [Raycast Store](https://www.raycast.com/finjo/whisper-dictation). However if you'd prefer to build from source see below**
+**This extension is now available to download from the [Raycast Store](https://www.raycast.com/finjo/whisper-dictation). However if you'd prefer to build from source see below**
 
 ### 1. Prerequisites
 
@@ -75,7 +75,7 @@ After installing, you have to configure the extension preferences in Raycast, if
         *   `Paste Text`: Pastes the text into the active application.
         *   `Copy to Clipboard`: Copies the text to the clipboard.
         *   `None (Show Options)`: Shows the transcribed text in Raycast with manual Paste/Copy actions (Default).
-5. Configure other preferences such as wether to be asked which refinement prompt to use before each transcription, or use the prompt chosen in `Configure AI Refinement` by default.
+5. Configure other preferences such as whether to be asked which refinement prompt to use before each transcription, or use the prompt chosen in `Configure AI Refinement` by default.
 
 ## 💡 Usage
 
