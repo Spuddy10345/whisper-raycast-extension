@@ -186,6 +186,24 @@
       "required": false,
       "placeholder": "llama3.2:latest",
       "default": "llama3.2:latest"
+    },
+    {
+      "name": "historyLimit",
+      "title": "History Size Limit",
+      "description": "Maximum number of transcriptions kept in Dictation History. Older entries are dropped when the limit is reached. Set to 0 or leave empty for unlimited (history will grow without bound — use with care).",
+      "type": "textfield",
+      "required": false,
+      "default": "100",
+      "placeholder": "100"
+    },
+    {
+      "name": "saveToHistory",
+      "title": "Save Dictations to History",
+      "description": "When enabled, every transcription is saved to Dictation History. Turn off if you'd rather rely on Raycast's Clipboard History (Pro) for retroactive access and don't want a separate copy of your dictations in this extension's storage. Note that with this off and the default action set to 'None', transcriptions have no record at all.",
+      "type": "checkbox",
+      "required": false,
+      "default": true,
+      "label": "Keep a dedicated dictation history"
     }
   ],
   "dependencies": {

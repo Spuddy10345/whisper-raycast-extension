@@ -119,6 +119,7 @@ export default function DictationHistoryCommand() {
             <List.Item
               key={item.id}
               title={item.text.substring(0, 70) + (item.text.length > 70 ? "..." : "")}
+              keywords={[item.text]}
               accessories={[{ text: formattedDate }]}
               detail={
                 <List.Item.Detail

@@ -74,50 +74,56 @@ export default function SimpleDictateCommand() {
 
   useConfiguration(setState, setConfig, setErrorMessage);
 
-  const saveTranscriptionToHistory = useCallback(async (text: string) => {
-    if (!text || text === "[BLANK_AUDIO]") return;
+  const saveTranscriptionToHistory = useCallback(
+    async (text: string) => {
+      if (!preferences.saveToHistory) return;
+      if (!text || text === "[BLANK_AUDIO]") return;
 
-    try {
-      const newItem: TranscriptionHistoryItem = {
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        text: text,
-      };
+      try {
+        const newItem: TranscriptionHistoryItem = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          text: text,
+        };
 
-      let history: TranscriptionHistoryItem[] = [];
-      const existingHistory = await LocalStorage.getItem<string>(HISTORY_STORAGE_KEY);
-      if (existingHistory) {
-        try {
-          history = JSON.parse(existingHistory);
-        } catch (parseError) {
-          console.error("Failed to parse history from LocalStorage:", parseError);
-          await showToast({
-            style: Toast.Style.Failure,
-            title: "Warning",
-            message: "Could not read previous dictation history. Clearing history.",
-          });
-          history = [];
+        let history: TranscriptionHistoryItem[] = [];
+        const existingHistory = await LocalStorage.getItem<string>(HISTORY_STORAGE_KEY);
+        if (existingHistory) {
+          try {
+            history = JSON.parse(existingHistory);
+          } catch (parseError) {
+            console.error("Failed to parse history from LocalStorage:", parseError);
+            await showToast({
+              style: Toast.Style.Failure,
+              title: "Warning",
+              message: "Could not read previous dictation history. Clearing history.",
+            });
+            history = [];
+          }
         }
+
+        history.unshift(newItem);
+
+        // Trim to the user-configured history limit (0/empty/invalid = unlimited)
+        const limitPref = parseInt(preferences.historyLimit || "", 10);
+        const historyLimit = Number.isFinite(limitPref) && limitPref > 0 ? limitPref : Infinity;
+        if (history.length > historyLimit) {
+          history = history.slice(0, historyLimit);
+        }
+
+        await LocalStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+        console.log("Saved transcription to history.");
+      } catch (error) {
+        console.error("Failed to save transcription to history:", error);
+        await showToast({
+          style: Toast.Style.Failure,
+          title: "Error",
+          message: "Failed to save transcription to history.",
+        });
       }
-
-      history.unshift(newItem);
-
-      const MAX_HISTORY_ITEMS = 100;
-      if (history.length > MAX_HISTORY_ITEMS) {
-        history = history.slice(0, MAX_HISTORY_ITEMS);
-      }
-
-      await LocalStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
-      console.log("Saved transcription to history.");
-    } catch (error) {
-      console.error("Failed to save transcription to history:", error);
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Error",
-        message: "Failed to save transcription to history.",
-      });
-    }
-  }, []);
+    },
+    [preferences.historyLimit, preferences.saveToHistory],
+  );
 
   const { startTranscription, handlePasteAndCopy } = useTranscription({
     config,
