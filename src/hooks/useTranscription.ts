@@ -205,61 +205,83 @@ export function useTranscription({
 
     console.log(`Starting transcription with model: ${config.modelPath}`);
 
+    // Build whisper-cli args from preferences
+    const args = ["-m", config.modelPath, "-f", AUDIO_FILE_PATH, "-otxt", "--no-timestamps"];
+
+    // Language: defaults to "auto" if preference is empty/missing
+    const language = (preferences.whisperLanguage || "auto").trim() || "auto";
+    args.push("-l", language);
+
+    // Thread count: only pass if user set a positive integer
+    const threads = parseInt(preferences.whisperThreads || "", 10);
+    if (Number.isFinite(threads) && threads > 0) {
+      args.push("-t", String(threads));
+    }
+
+    // Initial prompt: only pass if non-empty after trim
+    const initialPrompt = (preferences.whisperInitialPrompt || "").trim();
+    if (initialPrompt) {
+      args.push("--prompt", initialPrompt);
+    }
+
+    // Translate to English
+    if (preferences.whisperTranslate) {
+      args.push("--translate");
+    }
+
+    console.log(`whisper-cli args: ${args.join(" ")}`);
+
     // Execute whisper-cli
-    execFile(
-      config.execPath,
-      ["-m", config.modelPath, "-f", AUDIO_FILE_PATH, "-l", "auto", "-otxt", "--no-timestamps"],
-      async (error, stdout, stderr) => {
-        if (error) {
-          console.error("whisper exec error:", error);
-          console.error("whisper stderr:", stderr);
+    execFile(config.execPath, args, async (error, stdout, stderr) => {
+      if (error) {
+        console.error("whisper exec error:", error);
+        console.error("whisper stderr:", stderr);
 
-          let title = "Transcription Failed";
-          let errMsg = `An unknown error occurred during transcription.`;
+        let title = "Transcription Failed";
+        let errMsg = `An unknown error occurred during transcription.`;
 
-          const stderrStr = stderr?.toString() || "";
-          const errorMsgStr = error?.message || "";
+        const stderrStr = stderr?.toString() || "";
+        const errorMsgStr = error?.message || "";
 
-          if (stderrStr.includes("invalid model") || stderrStr.includes("failed to load model")) {
-            title = "Model Error";
-            errMsg = `The model file at '${config.modelPath}' is invalid, incompatible, or failed to load. Please check the model file, if it's compatible with whisper.cpp (ggml) or select a different one in preferences.`;
-          } else if (stderrStr.includes("No such file or directory") || errorMsgStr.includes("ENOENT")) {
-            if (errorMsgStr.includes(config.execPath)) {
-              title = "Whisper Executable Not Found";
-              errMsg = `The whisper executable was not found at '${config.execPath}'. Please verify the path in preferences.`;
-            } else if (stderrStr.includes(config.modelPath) || errorMsgStr.includes(config.modelPath)) {
-              title = "Model File Not Found";
-              errMsg = `The model file specified at '${config.modelPath}' was not found. Please check the path in preferences or download the model using the Download whisper model command.`;
-            } else {
-              title = "File Not Found";
-              errMsg = `A required file or directory was not found. Double check your whisper-cli and model path. ${stderrStr}`;
-            }
-          } else if (stderrStr) {
-            errMsg = `Transcription failed. Details: ${stderrStr}`;
+        if (stderrStr.includes("invalid model") || stderrStr.includes("failed to load model")) {
+          title = "Model Error";
+          errMsg = `The model file at '${config.modelPath}' is invalid, incompatible, or failed to load. Please check the model file, if it's compatible with whisper.cpp (ggml) or select a different one in preferences.`;
+        } else if (stderrStr.includes("No such file or directory") || errorMsgStr.includes("ENOENT")) {
+          if (errorMsgStr.includes(config.execPath)) {
+            title = "Whisper Executable Not Found";
+            errMsg = `The whisper executable was not found at '${config.execPath}'. Please verify the path in preferences.`;
+          } else if (stderrStr.includes(config.modelPath) || errorMsgStr.includes(config.modelPath)) {
+            title = "Model File Not Found";
+            errMsg = `The model file specified at '${config.modelPath}' was not found. Please check the path in preferences or download the model using the Download whisper model command.`;
           } else {
-            errMsg = `Transcription failed: ${error.message}`;
+            title = "File Not Found";
+            errMsg = `A required file or directory was not found. Double check your whisper-cli and model path. ${stderrStr}`;
           }
-
-          setErrorMessage(errMsg);
-          setState("error");
-          cleanupAudioFile(); // Clean up on exec error
-
-          await showFailureToast(errMsg, {
-            title: title,
-            primaryAction: {
-              title: "Open Extension Preferences",
-              onAction: () => openExtensionPreferences(),
-            },
-          });
+        } else if (stderrStr) {
+          errMsg = `Transcription failed. Details: ${stderrStr}`;
         } else {
-          console.log("Transcription successful.");
-          const trimmedText = stdout.trim() || "[BLANK_AUDIO]";
-          console.log("Transcribed text:", trimmedText);
-          // Pass text to handler to set state/save history/refine/etc.
-          await handleTranscriptionResult(trimmedText);
+          errMsg = `Transcription failed: ${error.message}`;
         }
-      },
-    );
+
+        setErrorMessage(errMsg);
+        setState("error");
+        cleanupAudioFile(); // Clean up on exec error
+
+        await showFailureToast(errMsg, {
+          title: title,
+          primaryAction: {
+            title: "Open Extension Preferences",
+            onAction: () => openExtensionPreferences(),
+          },
+        });
+      } else {
+        console.log("Transcription successful.");
+        const trimmedText = stdout.trim() || "[BLANK_AUDIO]";
+        console.log("Transcribed text:", trimmedText);
+        // Pass text to handler to set state/save history/refine/etc.
+        await handleTranscriptionResult(trimmedText);
+      }
+    });
   }, [config, setState, setErrorMessage, handleTranscriptionResult, cleanupAudioFile]);
 
   return { startTranscription, handlePasteAndCopy };

@@ -1,5 +1,13 @@
  # Changelog
 
+## [Whisper Engine Preferences] - {PR_MERGE_DATE}
+
+### Added
+- **Language** preference — pass a specific ISO 639-1 code to `whisper-cli` (`-l`) instead of always auto-detecting. Forcing the correct language usually beats auto-detect on short clips. Defaults to `auto`.
+- **CPU Threads** preference — pass a thread count to `whisper-cli` (`-t`). Leave empty for the whisper.cpp default. Useful for tuning transcription speed vs system responsiveness.
+- **Initial Prompt** preference — pass an initial prompt to `whisper-cli` (`--prompt`) to bias transcription toward specific vocabulary, punctuation, or style. Distinct from AI refinement — this happens inside Whisper itself, before transcription completes.
+- **Translate to English** preference — pass `--translate` to `whisper-cli` so the output is English translation rather than source-language transcription.
+
  ## [0.1.0] - 2025-06-05
 
  ### Added

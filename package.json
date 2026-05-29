@@ -186,6 +186,42 @@
       "required": false,
       "placeholder": "llama3.2:latest",
       "default": "llama3.2:latest"
+    },
+    {
+      "name": "whisperLanguage",
+      "title": "Language",
+      "description": "ISO 639-1 language code for transcription, or 'auto' to detect. Common codes: en (English), es (Spanish), fr (French), de (German), it (Italian), pt (Portuguese), nl (Dutch), pl (Polish), ru (Russian), zh (Chinese), ja (Japanese), ko (Korean), ar (Arabic), hi (Hindi). Forcing the correct language usually beats auto-detect on short clips.",
+      "type": "textfield",
+      "required": false,
+      "default": "auto",
+      "placeholder": "auto"
+    },
+    {
+      "name": "whisperThreads",
+      "title": "CPU Threads",
+      "description": "Number of CPU threads to pass to whisper-cli (-t). Leave empty to use whisper.cpp's default. Lower this if other apps feel sluggish during transcription, raise it on high-core systems if Whisper isn't saturating your CPU.",
+      "type": "textfield",
+      "required": false,
+      "default": "",
+      "placeholder": "(default)"
+    },
+    {
+      "name": "whisperInitialPrompt",
+      "title": "Initial Prompt",
+      "description": "Optional text passed to whisper-cli (--prompt) that biases transcription toward specific vocabulary, punctuation, or style. Different from AI refinement — this is sent to Whisper itself, before transcription. Useful for domain-specific terms (e.g. 'kubectl, podman, GraphQL') or to encourage punctuation/capitalization (e.g. 'Hello, world. This is a sentence.'). Max ~224 tokens.",
+      "type": "textfield",
+      "required": false,
+      "default": "",
+      "placeholder": "Optional"
+    },
+    {
+      "name": "whisperTranslate",
+      "title": "Translate to English",
+      "description": "When enabled, Whisper translates the source audio to English instead of transcribing it in the original language. Passes --translate to whisper-cli.",
+      "type": "checkbox",
+      "required": false,
+      "default": false,
+      "label": "Translate audio to English instead of transcribing"
     }
   ],
   "dependencies": {
