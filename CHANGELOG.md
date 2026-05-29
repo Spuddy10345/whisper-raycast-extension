@@ -1,5 +1,10 @@
  # Changelog
 
+## [Recording Elapsed Time] - {PR_MERGE_DATE}
+
+### Added
+- Recording-screen waveform header now shows the elapsed recording time (`M:SS`) updated every animation tick (~150ms). Helpful when you're not sure if recording is still active, and useful for staying under model context windows on long dictations.
+
  ## [0.1.0] - 2025-06-05
 
  ### Added
