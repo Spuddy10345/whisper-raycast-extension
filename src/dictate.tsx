@@ -226,58 +226,64 @@ export default function DictateWithAICommand() {
     setState,
   ]);
 
-  const saveTranscriptionToHistory = useCallback(async (text: string) => {
-    // Don't save empty transcription
-    if (!text || text === "[BLANK_AUDIO]" || text === "[PAUSE]") return;
+  const saveTranscriptionToHistory = useCallback(
+    async (text: string) => {
+      // Respect the user's history opt-out
+      if (!preferences.saveToHistory) return;
+      // Don't save empty transcription
+      if (!text || text === "[BLANK_AUDIO]" || text === "[PAUSE]") return;
 
-    try {
-      const newItem: TranscriptionHistoryItem = {
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        text: text,
-      };
+      try {
+        const newItem: TranscriptionHistoryItem = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          text: text,
+        };
 
-      const existingHistoryString = await LocalStorage.getItem<string>(HISTORY_STORAGE_KEY);
-      let history: TranscriptionHistoryItem[] = [];
+        const existingHistoryString = await LocalStorage.getItem<string>(HISTORY_STORAGE_KEY);
+        let history: TranscriptionHistoryItem[] = [];
 
-      if (existingHistoryString) {
-        try {
-          history = JSON.parse(existingHistoryString);
-          if (!Array.isArray(history)) {
-            console.warn("Invalid history data found in LocalStorage, resetting.");
-            history = [];
+        if (existingHistoryString) {
+          try {
+            history = JSON.parse(existingHistoryString);
+            if (!Array.isArray(history)) {
+              console.warn("Invalid history data found in LocalStorage, resetting.");
+              history = [];
+            }
+          } catch (parseError) {
+            console.error("Failed to parse history from LocalStorage:", parseError);
+            await showToast({
+              style: Toast.Style.Failure,
+              title: "Warning",
+              message: "Could not read previous dictation history. Clearing history.",
+            });
+            history = []; // Reset history if parse fails
           }
-        } catch (parseError) {
-          console.error("Failed to parse history from LocalStorage:", parseError);
-          await showToast({
-            style: Toast.Style.Failure,
-            title: "Warning",
-            message: "Could not read previous dictation history. Clearing history.",
-          });
-          history = []; // Reset history if parse fails
         }
+
+        // Add new item to beginning
+        history.unshift(newItem);
+
+        // Trim to the user-configured history limit (0/empty/invalid = unlimited)
+        const limitPref = parseInt(preferences.historyLimit || "", 10);
+        const historyLimit = Number.isFinite(limitPref) && limitPref > 0 ? limitPref : Infinity;
+        if (history.length > historyLimit) {
+          history = history.slice(0, historyLimit);
+        }
+
+        await LocalStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+        console.log("Saved transcription to history.");
+      } catch (error) {
+        console.error("Failed to save transcription to history:", error);
+        await showToast({
+          style: Toast.Style.Failure,
+          title: "Error",
+          message: "Failed to save transcription to history.",
+        });
       }
-
-      // Add new item to beginning
-      history.unshift(newItem);
-
-      // Limit history size
-      const MAX_HISTORY_ITEMS = 100;
-      if (history.length > MAX_HISTORY_ITEMS) {
-        history = history.slice(0, MAX_HISTORY_ITEMS);
-      }
-
-      await LocalStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
-      console.log("Saved transcription to history.");
-    } catch (error) {
-      console.error("Failed to save transcription to history:", error);
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Error",
-        message: "Failed to save transcription to history.",
-      });
-    }
-  }, []);
+    },
+    [preferences.historyLimit, preferences.saveToHistory],
+  );
 
   // Effect to reset session prompt when AI refinement is disabled
   useEffect(() => {
