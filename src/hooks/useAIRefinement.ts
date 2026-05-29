@@ -70,18 +70,44 @@ async function refineWithRaycastAI(
   }
 }
 
-// Helper for Ollama refinement
-async function refineWithOllama(
+// Built-in endpoints for named providers. Selecting any of these in the
+// 'AI Refinement Method' preference overrides whatever's in 'Custom API
+// Endpoint', so users only need to set the API key + model name.
+const PROVIDER_ENDPOINTS: Record<string, string> = {
+  openai: "https://api.openai.com",
+  anthropic: "https://api.anthropic.com",
+  openrouter: "https://openrouter.ai/api",
+};
+
+// Human-readable provider name for error/status messages.
+function providerLabel(method: string): string {
+  switch (method) {
+    case "openai":
+      return "OpenAI";
+    case "anthropic":
+      return "Anthropic";
+    case "openrouter":
+      return "OpenRouter";
+    default:
+      return "API server";
+  }
+}
+
+// Generic refinement against any OpenAI v1 chat-completions-compatible endpoint
+// (OpenAI, Anthropic's OpenAI-compat layer, OpenRouter, Ollama, or a custom
+// OpenAI-compatible server).
+async function refineWithOpenAICompatible(
   text: string,
   endpoint: string,
   model: string,
   apiKey: string | undefined,
+  providerName: string,
   setAiErrorMessage: Dispatch<SetStateAction<string>>,
 ): Promise<string> {
   try {
     const activePrompt = await getActivePrompt();
     const baseEndpoint = endpoint.endsWith("/") ? endpoint.slice(0, -1) : endpoint;
-    const ollamaUrl = `${baseEndpoint}/v1/chat/completions`;
+    const apiUrl = `${baseEndpoint}/v1/chat/completions`;
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -90,7 +116,7 @@ async function refineWithOllama(
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
-    const response = await fetch(ollamaUrl, {
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: headers,
       body: JSON.stringify({
@@ -105,8 +131,8 @@ async function refineWithOllama(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Ollama API error (${response.status}): ${errorText}`);
-      const errorMessage = `Ollama API error (${response.status}): ${errorText}`;
+      console.error(`${providerName} API error (${response.status}): ${errorText}`);
+      const errorMessage = `${providerName} API error (${response.status}): ${errorText}`;
       setAiErrorMessage(errorMessage);
       throw new Error(errorMessage);
     }
@@ -116,24 +142,24 @@ async function refineWithOllama(
     if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
       return data.choices[0].message.content.trim();
     } else {
-      console.error("Unexpected Ollama response structure:", data);
-      const errorMessage = "Unexpected response structure from Ollama API.";
+      console.error(`Unexpected ${providerName} response structure:`, data);
+      const errorMessage = `Unexpected response structure from ${providerName} API.`;
       setAiErrorMessage(errorMessage);
-      throw new Error("Failed to parse response from Ollama.");
+      throw new Error(`Failed to parse response from ${providerName}.`);
     }
   } catch (error) {
-    console.error("Ollama refinement failed:", error);
+    console.error(`${providerName} refinement failed:`, error);
     let errorMessage = error instanceof Error ? error.message : "Unknown error";
     if (error instanceof TypeError && error.message.includes("fetch")) {
-      errorMessage = `Could not connect to the Ollama server at ${endpoint}. Please ensure it's running and accessible.`;
+      errorMessage = `Could not connect to ${providerName} at ${endpoint}. Please ensure it's reachable.`;
     } else if (error instanceof Error && typeof error.message === "string") {
       if (error.message.includes("401")) {
-        errorMessage = "Invalid API key or authentication error with the Ollama server.";
+        errorMessage = `Invalid API key or authentication error with ${providerName}.`;
       } else if (error.message.includes("403")) {
-        errorMessage = "Your API key doesn't have permission to access this resource.";
+        errorMessage = `Your API key doesn't have permission to access this resource on ${providerName}.`;
       }
     }
-    setAiErrorMessage(`Ollama refinement failed: ${errorMessage}`);
+    setAiErrorMessage(`${providerName} refinement failed: ${errorMessage}`);
     throw error; // Re-throw to be caught by caller
   }
 }
@@ -170,12 +196,17 @@ export function useAIRefinement(setAiErrorMessage: Dispatch<SetStateAction<strin
           }
           refinedText = await refineWithRaycastAI(text, preferences.aiModel, setAiErrorMessage);
         } else {
-          // Use Ollama
-          refinedText = await refineWithOllama(
+          // Named provider (openai/anthropic/openrouter) → use the baked-in
+          // endpoint. Anything else (ollama, "custom") → use the user's
+          // configured endpoint.
+          const endpoint = PROVIDER_ENDPOINTS[preferences.aiRefinementMethod] ?? preferences.ollamaEndpoint;
+          const providerName = providerLabel(preferences.aiRefinementMethod);
+          refinedText = await refineWithOpenAICompatible(
             text,
-            preferences.ollamaEndpoint,
+            endpoint,
             preferences.ollamaModel,
             preferences.ollamaApiKey,
+            providerName,
             setAiErrorMessage,
           );
         }
