@@ -6,11 +6,12 @@ Effortlessly convert your speech to text directly within Raycast using the power
 ## ✨ Features
 
 *   **Local Transcription:** Uses `whisper.cpp` running locally on your machine through Raycast.
-*   **Refine with AI** Optionally refine the transcribed text using Raycast AI or any OpenAI (v1) compatible API, such as Anthropic, OpenAI, a local Ollama server.
-    **Download Models** Download a variety of whisper models from right within the extension.
-    **Dictation History** Saves all transcriptions locally with timestamps which can be browsed, copied and pasted using the Dictation History command.
-*   **Simple Interface:** Start recording, press Enter to stop, copy or paste directly into your active window.
-*   **Configurable Output:** Choose to choose, or automatically paste/copy to clipboard. 
+*   **Refine with AI:** Optionally refine the transcribed text using Raycast AI or any OpenAI (v1) compatible API, such as Anthropic, OpenAI, or a local Ollama server.
+*   **Download Models:** Download and manage a variety of Whisper models directly within the extension.
+*   **Dictation History:** Saves all transcriptions locally with timestamps which can be browsed, copied, and pasted.
+*   **Custom Prompts:** Select custom AI refinement prompts before dictating, assign keyboard shortcuts, and generate standalone script commands for them.
+*   **Simple Interface:** Start recording, press Enter to stop, and copy or paste directly into your active window.
+*   **Configurable Output:** Choose to copy, paste, or perform both automatically after transcription finishes. 
 
 ## ⚠️ Requirements
 
@@ -53,30 +54,40 @@ After installing, you have to configure the extension preferences in Raycast, if
 
 ## 💡 Usage
 
-1.  **Launch:** Open Raycast and search for the "Dictate Text" command. Press Enter.
-2.  **Download a Model** 
-    * Choose the `Download Whisper Model` command and choose the model you would like to download with `Enter`.
-    * You can choose your active model with `Enter` if you have multiple models downloaded.
-    * Larger models are more accurate, but also slower and require more RAM/processing power
-    * Delete models you no longer need using `Ctrl+X`
-3.  **Record:** Open the `Dictate Text` command. The extension window will appear, showing a "RECORDING AUDIO..." message and a waveform animation. Start speaking clearly.
+### Available Commands
+
+*   **Dictate:** Convert speech to text using Whisper directly (no AI refinement).
+*   **Dictate with AI:** Convert speech to text with AI refinement options (uses the default active prompt if enabled).
+*   **Dictate with AI Prompt:** Choose a specific AI prompt from a list before starting dictation.
+*   **Configure AI Refinement:** Create, edit, and delete prompts, assign shortcuts, set the active default prompt, and generate standalone script commands.
+*   **Dictation History:** View, search, copy, and manage your past transcriptions.
+*   **Download Whisper Model:** Download and manage Whisper models locally.
+
+### Standard Workflow
+
+1.  **Download a Model:** 
+    *   Choose the **Download Whisper Model** command and choose the model you would like to download with `Enter`.
+    *   You can choose your active model with `Enter` if you have multiple models downloaded.
+    *   Larger models are more accurate, but also slower and require more RAM/processing power.
+    *   Delete models you no longer need using `Ctrl + X`.
+2.  **Record:** Open the **Dictate with AI** (or **Dictate**) command. The extension window will appear, showing a "RECORDING AUDIO..." message and a waveform animation. Start speaking clearly.
     *   Press `Enter` when you are finished speaking.
     *   Press `⌘ + .` or click "Cancel Recording" to abort.
-4.  **Transcribe:** The view will change to show a loading indicator while `whisper.cpp` processes the audio. This may take a few seconds depending on the audio length and model size.
-5.  **Result:**
+3.  **Transcribe:** The view will change to show a loading indicator while `whisper.cpp` processes the audio. This may take a few seconds depending on the audio length and model size.
+4.  **Result:**
     *   If transcription is successful, the text area will populate with the dictated text.
-    * If there are any mistakes you can modify the text directly within the text box (as long as auto copy/paste isn't active)
+    *   If there are any mistakes you can modify the text directly within the text box (as long as auto copy/paste isn't active).
     *   Based on your "Default Action" preference:
         *   It might automatically paste or copy, and close Raycast.
         *   Or, it will display the text with actions:
             *   `Paste Text`: Pastes the content.
             *   `Copy Text` (`⌘ + Enter`): Copies the content.
-            *   Or automate the process in `Preferences`
+            *   Or automate the process in `Preferences`.
             *   `Close` (`Esc`): Closes the Raycast window.
     *   If an error occurs during recording or transcription, an error message will be displayed.
-6. **History:** Check back in your `Dictation History` anytime you need a past transcription. It currently stores up to 100. 
-    * Delete transcriptions as needed with `Ctrl+X` 
-    * Or delete all with `Ctrl+Shift+X` for a fresh start.
+5.  **History:** Check back in your **Dictation History** anytime you need a past transcription. It currently stores up to 100. 
+    *   Delete transcriptions as needed with `Ctrl + X`.
+    *   Or delete all with `Ctrl + Shift + X` for a fresh start.
 
 ## 🖋️ Refine with AI
 
@@ -215,6 +226,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## ❤️ Acknowledgements
 
+*   [SHL0MS](https://github.com/SHL0MS) for implementing and fixing most of the features, including script commands, model download notifications, and waveform fixes.
 *   [Georgi Gerganov](https://github.com/ggerganov) for the amazing [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp) project.
 *   The [Raycast](https://raycast.com/) team for the fantastic platform and API.
 *   [SoX - Sound eXchange](https://github.com/chirlu/sox) developers.
