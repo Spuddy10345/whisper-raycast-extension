@@ -7,11 +7,14 @@ import {
   launchCommand,
   LaunchType,
   closeMainWindow,
+  environment,
 } from "@raycast/api";
 import fs from "fs";
+import path from "path";
 import { showFailureToast } from "@raycast/utils"; // Added import
 
 const DOWNLOADED_MODEL_PATH_KEY = "downloadedModelPath";
+const MODEL_DIR = path.join(environment.supportPath, "models");
 
 //Define states
 type CommandState =
@@ -90,21 +93,28 @@ export function useConfiguration(
         } else if (downloadedPath && fs.existsSync(downloadedPath)) {
           finalModelPath = downloadedPath;
         } else {
-          const errorMsg =
-            "No Whisper model found. Please run the 'Download Whisper Model' command or configure the path override in preferences.";
-          setErrorMessage(errorMsg);
-          setState("error");
-          await showFailureToast(errorMsg, {
-            title: "Whisper Model Not Found",
-            primaryAction: {
-              title: "Download Model",
-              onAction: async () => {
-                await launchCommand({ name: "download-model", type: LaunchType.UserInitiated });
-                closeMainWindow();
+          // Fallback: scan the models directory for any .bin file
+          const detectedModelPath = await detectModelInDirectory();
+          if (detectedModelPath) {
+            await LocalStorage.setItem(DOWNLOADED_MODEL_PATH_KEY, detectedModelPath);
+            finalModelPath = detectedModelPath;
+          } else {
+            const errorMsg =
+              "No Whisper model found. Please run the 'Download Whisper Model' command or configure the path override in preferences.";
+            setErrorMessage(errorMsg);
+            setState("error");
+            await showFailureToast(errorMsg, {
+              title: "Whisper Model Not Found",
+              primaryAction: {
+                title: "Download Model",
+                onAction: async () => {
+                  await launchCommand({ name: "download-model", type: LaunchType.UserInitiated });
+                  closeMainWindow();
+                },
               },
-            },
-          });
-          return;
+            });
+            return;
+          }
         }
       } catch (error) {
         const errorMsg = "Error accessing configuration. Check console logs.";
@@ -132,4 +142,28 @@ export function useConfiguration(
       isMounted = false;
     };
   }, [preferences.whisperExecutable, preferences.modelPath, preferences.soxExecutablePath]);
+}
+
+/**
+ * Scans the models directory for any .bin file and returns the path of the first one found.
+ * This allows auto-detection of model files that were not downloaded via the extension's
+ * download command (e.g. manually placed files or models from other sources).
+ * Files are sorted alphabetically for deterministic selection.
+ */
+async function detectModelInDirectory(): Promise<string | null> {
+  try {
+    if (!fs.existsSync(MODEL_DIR)) {
+      return null;
+    }
+    const files = await fs.promises.readdir(MODEL_DIR);
+    const binFile = files.filter((file) => file.endsWith(".bin")).sort()[0];
+    if (binFile) {
+      const detected = path.join(MODEL_DIR, binFile);
+      console.log("Auto-detected model file:", detected);
+      return detected;
+    }
+  } catch (error) {
+    console.error("Error scanning models directory:", error);
+  }
+  return null;
 }
