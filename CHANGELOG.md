@@ -1,5 +1,18 @@
  # Changelog
 
+## [Unreleased]
+
+### Added
+- New "Dictate with AI Prompt" command to select a specific prompt before dictating
+- Support for single-character keyboard shortcuts on prompts
+  - Assign shortcuts to your most-used prompts for faster access
+  - Shortcuts are displayed as tags in the prompt list
+- Create standalone Raycast script commands from prompts
+  - Generate custom script commands that open dictation with a specific prompt
+  - Accessible via "Create Standalone Command" action (⌘⇧C)
+  - Requires setting Script Commands Path in preferences
+- Launch context support for direct prompt selection via deep links
+
 ## [0.1.2] - 2025-07-29
 
 ### Fixed
@@ -12,10 +25,10 @@
 ## [0.1.1] - 2025-06-26
 ### Added
 
-- Preference to both copy and paste transcibed text automatically
-- Added seperate commands for dictation and dictation with AI refinement
-  - This gives more flexibility and how and when each command is called
-- Added shortcut to skip refinement for a sesssion during the prompt selection menu (if configured)
+- Preference to both copy and paste transcribed text automatically
+- Added separate commands for dictation and dictation with AI refinement
+  - This gives more flexibility in how and when each command is called
+- Added shortcut to skip refinement for a session during the prompt selection menu (if configured)
 
 
 ## [0.1.0] - 2025-06-05
