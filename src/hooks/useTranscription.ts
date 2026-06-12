@@ -45,6 +45,12 @@ interface UseTranscriptionProps {
   cleanupAudioFile: () => void;
   aiErrorMessage: string;
   skipAIForSession: boolean;
+  /**
+   * Optional post-processing applied to the transcription text AFTER any AI
+   * refinement and BEFORE it's set as state, saved to history, or pasted.
+   * Used by Dictate (No Punctuation) to strip punctuation and lowercase.
+   */
+  transformText?: (text: string) => string;
 }
 /**
  * Hook that manages audio transcription using Whisper CLI.
@@ -70,6 +76,7 @@ export function useTranscription({
   cleanupAudioFile,
   aiErrorMessage,
   skipAIForSession,
+  transformText,
 }: UseTranscriptionProps) {
   const handlePasteAndCopy = useCallback(
     async (text: string) => {
@@ -113,6 +120,12 @@ export function useTranscription({
         }
       } else {
         console.log("AI refinement skipped.");
+      }
+
+      // Optional post-processing (e.g. strip punctuation for casual dictation).
+      // Skip on the empty-result sentinel so we don't lowercase / mutate it.
+      if (transformText && finalText && finalText !== "[BLANK_AUDIO]" && finalText !== "[PAUSE]") {
+        finalText = transformText(finalText);
       }
 
       setTranscribedText(finalText);
@@ -161,6 +174,7 @@ export function useTranscription({
       aiErrorMessage,
       handlePasteAndCopy,
       skipAIForSession,
+      transformText,
     ],
   );
 

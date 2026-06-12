@@ -34,6 +34,13 @@
       "mode": "view"
     },
     {
+      "name": "dictate-no-punctuation",
+      "title": "Dictate (No Punctuation)",
+      "subtitle": "Whisper Dictation",
+      "description": "Convert speech to text without punctuation or capitalization — for casual conversations and raw word capture. Assign your own hotkey via Raycast Settings.",
+      "mode": "view"
+    },
+    {
       "name": "download-model",
       "title": "Download Whisper Model",
       "subtitle": "Whisper Dictation",
