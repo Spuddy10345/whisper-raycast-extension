@@ -211,6 +211,7 @@ The extension downloader currently supports the following whisper models, howeve
 *   **Extension doesn't appear:**
     *   Ensure you ran `npm install` and `npm run build` in the extension directory.
     *   Try removing and re-importing the extension in Raycast preferences.
+* **Home Assistant / Eufy device discovery:** This Raycast extension is only for local speech-to-text. It does not connect to Home Assistant or Eufy devices. If you're trying to adapt the Eufy S1 Pro HACS integration for a regular S1, the device will not show up here—you need to add support for that model in the Home Assistant integration itself.
 *   **Refining Errors:** 
     *   If using Ollama/External API:
         * Double check your model code, use `ollama ls` to check installed models with ollama, or find external API models in their documentation
