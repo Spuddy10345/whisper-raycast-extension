@@ -26,8 +26,5 @@ compiled_raycast_swift
 # misc
 .DS_Store
 *.zip
-<<<<<<< HEAD
 .githubCLAUDE.md
-=======
->>>>>>> contributions/merge-1783160227974
 .github
