@@ -385,8 +385,8 @@ export default function DictateWithAICommand(props: CommandProps) {
   }, [state, startTranscription]);
 
   const generateWaveformMarkdown = useCallback(() => {
-    const waveformHeight = 9;
-    const waveformWidth = 38;
+    const waveformHeight = 10;
+    const waveformWidth = 95;
     let waveform = "```\n"; // Start md code block
     waveform += "RECORDING AUDIO... PRESS ENTER TO STOP\n\n";
 
@@ -597,9 +597,9 @@ export default function DictateWithAICommand(props: CommandProps) {
                       shortcut={
                         prompt.shortcut
                           ? {
-                              modifiers: [],
-                              key: prompt.shortcut as KeyEquivalent,
-                            }
+                            modifiers: [],
+                            key: prompt.shortcut as KeyEquivalent,
+                          }
                           : undefined
                       }
                     />
