@@ -57,6 +57,7 @@ export default function SimpleDictateCommand() {
   const soxProcessRef = useRef<ChildProcessWithoutNullStreams | null>(null);
   const [waveformSeed, setWaveformSeed] = useState<number>(0);
   const [config, setConfig] = useState<Config | null>(null);
+  const transcriptionStartedRef = useRef<boolean>(false);
 
   const preferences = getPreferenceValues<Preferences>();
   const DEFAULT_ACTION = preferences.defaultAction || "none";
@@ -166,8 +167,9 @@ export default function SimpleDictateCommand() {
       console.warn("stopRecordingAndTranscribe: No active sox process reference found to stop.");
     }
 
-    await startTranscription();
-  }, [state, startTranscription]);
+    // Only set state to transcribing - the useEffect will handle calling startTranscription
+    setState("transcribing");
+  }, [state, setState]);
 
   const { restartRecording } = useRecording(state, config, setState, setErrorMessage, soxProcessRef);
 
@@ -193,11 +195,16 @@ export default function SimpleDictateCommand() {
   }, [state]);
 
   useEffect(() => {
-    if (state === "transcribing") {
+    if (state === "transcribing" && !transcriptionStartedRef.current) {
+      transcriptionStartedRef.current = true;
       const timer = setTimeout(() => {
         startTranscription();
       }, 100);
       return () => clearTimeout(timer);
+    }
+    // Reset the ref when we leave transcribing state
+    if (state !== "transcribing") {
+      transcriptionStartedRef.current = false;
     }
   }, [state, startTranscription]);
 
