@@ -145,10 +145,25 @@ async function checkModelExists(filename: string): Promise<boolean> {
   }
 }
 
+/**
+ * Formats a raw .bin filename into a human-readable model name.
+ * Strips common prefixes (e.g. "ggml-") and the ".bin" extension,
+ * then capitalises words for display.
+ */
+function formatCustomModelName(filename: string): string {
+  return filename
+    .replace(/\.bin$/, "")
+    .replace(/^ggml-/, "")
+    .split(/[-_]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export default function DownloadModelCommand() {
   const [isLoading, setIsLoading] = useState<string | false>(false);
   const [downloadedModels, setDownloadedModels] = useCachedState<Record<string, boolean>>("downloadedModelsState", {});
   const [activeModelPath, setActiveModelPath] = useState<string | null>(null);
+  const [customModels, setCustomModels] = useState<WhisperModel[]>([]);
 
   // Check existing models on mount
   useEffect(() => {
@@ -217,6 +232,27 @@ export default function DownloadModelCommand() {
         setDownloadedModels(updatedStatus);
       } else {
         console.log("No changes in downloaded models state.");
+      }
+
+      // Scan for custom .bin files not in the predefined list
+      try {
+        const knownFilenames = new Set(models.map((m) => m.filename));
+        const dirEntries = await fs.promises.readdir(MODEL_DIR);
+        const detected: WhisperModel[] = dirEntries
+          .filter((file) => file.endsWith(".bin") && !knownFilenames.has(file))
+          .sort()
+          .map((file) => ({
+            key: `custom:${file}`,
+            name: formatCustomModelName(file),
+            filename: file,
+            url: "",
+          }));
+        if (detected.length > 0) {
+          console.log("Detected custom model files:", detected.map((m) => m.filename).join(", "));
+        }
+        setCustomModels(detected);
+      } catch (error) {
+        console.error("Error scanning for custom models:", error);
       }
     }
     checkExisting();
@@ -503,74 +539,134 @@ export default function DownloadModelCommand() {
 
   return (
     <List isLoading={isLoading !== false}>
-      {models.map((model) => {
-        const isDownloaded = downloadedModels[model.key] || false;
-        //get model path and active status
-        const modelPath = path.join(MODEL_DIR, model.filename);
-        const isActive = isDownloaded && activeModelPath === modelPath;
+      <List.Section title="Available Models">
+        {models.map((model) => {
+          const isDownloaded = downloadedModels[model.key] || false;
+          //get model path and active status
+          const modelPath = path.join(MODEL_DIR, model.filename);
+          const isActive = isDownloaded && activeModelPath === modelPath;
 
-        //build accessories
-        const accessories = [];
-        if (isActive) {
-          // Add "Active" tag first if it's the active model
-          accessories.push({ tag: { value: "Active", color: Icon.Checkmark }, tooltip: "Currently active model" });
-        }
-        if (isDownloaded) {
-          // Add downloaded tag
-          accessories.push({ tag: { value: "Downloaded", color: "green" }, tooltip: "Model is downloaded" });
-        }
-        // Always add filename
-        accessories.push({ text: model.filename });
+          //build accessories
+          const accessories = [];
+          if (isActive) {
+            // Add "Active" tag first if it's the active model
+            accessories.push({ tag: { value: "Active", color: Icon.Checkmark }, tooltip: "Currently active model" });
+          }
+          if (isDownloaded) {
+            // Add downloaded tag
+            accessories.push({ tag: { value: "Downloaded", color: "green" }, tooltip: "Model is downloaded" });
+          }
+          // Always add filename
+          accessories.push({ text: model.filename });
 
-        // Is ANY operation running?
-        const isAnyOperationLoading = isLoading !== false;
+          // Is ANY operation running?
+          const isAnyOperationLoading = isLoading !== false;
 
-        return (
-          <List.Item
-            key={model.key}
-            title={model.name}
-            subtitle={model.size}
-            accessories={accessories}
-            actions={
-              <ActionPanel>
-                {!isDownloaded && !isAnyOperationLoading && (
-                  <Action title={`Download ${model.name}`} onAction={() => downloadModel(model)} icon={Icon.Download} />
-                )}
-                {isDownloaded && !isAnyOperationLoading && (
-                  <Action
-                    title="Set as Active Model"
-                    icon={Icon.Checkmark}
-                    onAction={async () => {
-                      console.log(`Setting active model path: ${modelPath}`);
-                      await LocalStorage.setItem(DOWNLOADED_MODEL_PATH_KEY, modelPath);
-                      setActiveModelPath(modelPath);
-                      await showToast(
-                        Toast.Style.Success,
-                        "Active Model Set",
-                        `${model.name} is now the active model.`,
-                      );
-                    }}
-                  />
-                )}
-                {isDownloaded && !isAnyOperationLoading && (
-                  <Action
-                    title={`Delete ${model.name}`}
-                    icon={Icon.Trash}
-                    style={Action.Style.Destructive}
-                    onAction={() => deleteModel(model)}
-                    shortcut={{ modifiers: ["ctrl"], key: "x" }}
-                  />
-                )}
-                {isDownloaded && !isAnyOperationLoading && (
-                  <Action.ShowInFinder
-                    path={modelPath} // Use calculated modelPath
-                  />
-                )}
-              </ActionPanel>
+          return (
+            <List.Item
+              key={model.key}
+              title={model.name}
+              subtitle={model.size}
+              accessories={accessories}
+              actions={
+                <ActionPanel>
+                  {!isDownloaded && !isAnyOperationLoading && (
+                    <Action
+                      title={`Download ${model.name}`}
+                      onAction={() => downloadModel(model)}
+                      icon={Icon.Download}
+                    />
+                  )}
+                  {isDownloaded && !isAnyOperationLoading && (
+                    <Action
+                      title="Set as Active Model"
+                      icon={Icon.Checkmark}
+                      onAction={async () => {
+                        console.log(`Setting active model path: ${modelPath}`);
+                        await LocalStorage.setItem(DOWNLOADED_MODEL_PATH_KEY, modelPath);
+                        setActiveModelPath(modelPath);
+                        await showToast(
+                          Toast.Style.Success,
+                          "Active Model Set",
+                          `${model.name} is now the active model.`,
+                        );
+                      }}
+                    />
+                  )}
+                  {isDownloaded && !isAnyOperationLoading && (
+                    <Action
+                      title={`Delete ${model.name}`}
+                      icon={Icon.Trash}
+                      style={Action.Style.Destructive}
+                      onAction={() => deleteModel(model)}
+                      shortcut={{ modifiers: ["ctrl"], key: "x" }}
+                    />
+                  )}
+                  {isDownloaded && !isAnyOperationLoading && (
+                    <Action.ShowInFinder
+                      path={modelPath} // Use calculated modelPath
+                    />
+                  )}
+                </ActionPanel>
+              }
+            />
+          );
+        })}
+      </List.Section>
+      {customModels.length > 0 && (
+        <List.Section title="Detected Local Models">
+          {customModels.map((model) => {
+            const modelPath = path.join(MODEL_DIR, model.filename);
+            const isActive = activeModelPath === modelPath;
+            const isAnyOperationLoading = isLoading !== false;
+
+            const accessories = [];
+            if (isActive) {
+              accessories.push({ tag: { value: "Active", color: Icon.Checkmark }, tooltip: "Currently active model" });
             }
-          />
-        );
-      })}
+            accessories.push({ tag: { value: "Local", color: "blue" }, tooltip: "Manually added model file" });
+            accessories.push({ text: model.filename });
+
+            return (
+              <List.Item
+                key={model.key}
+                title={model.name}
+                accessories={accessories}
+                actions={
+                  <ActionPanel>
+                    {!isActive && !isAnyOperationLoading && (
+                      <Action
+                        title="Set as Active Model"
+                        icon={Icon.Checkmark}
+                        onAction={async () => {
+                          console.log(`Setting active model path: ${modelPath}`);
+                          await LocalStorage.setItem(DOWNLOADED_MODEL_PATH_KEY, modelPath);
+                          setActiveModelPath(modelPath);
+                          await showToast(
+                            Toast.Style.Success,
+                            "Active Model Set",
+                            `${model.name} is now the active model.`,
+                          );
+                        }}
+                      />
+                    )}
+                    {!isAnyOperationLoading && (
+                      <Action
+                        title={`Delete ${model.name}`}
+                        icon={Icon.Trash}
+                        style={Action.Style.Destructive}
+                        onAction={() => deleteModel(model)}
+                        shortcut={{ modifiers: ["ctrl"], key: "x" }}
+                      />
+                    )}
+                    {!isAnyOperationLoading && <Action.ShowInFinder path={modelPath} />}
+                  </ActionPanel>
+                }
+              />
+            );
+          })}
+        </List.Section>
+      )}
     </List>
   );
 }
